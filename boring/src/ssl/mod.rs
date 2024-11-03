@@ -723,6 +723,9 @@ impl SslCurve {
     #[cfg(feature = "pq-experimental")]
     pub const P256_KYBER768_DRAFT00: SslCurve = SslCurve(ffi::SSL_CURVE_P256_KYBER768_DRAFT00 as _);
 
+    #[cfg(feature = "pq-experimental")]
+    pub const SSL_CURVE_X25519_MLKEM768: SslCurve = SslCurve(ffi::SSL_CURVE_X25519_MLKEM768 as _);
+
     /// Returns the curve name
     ///
     /// This corresponds to [`SSL_get_curve_name`]
