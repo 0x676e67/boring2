@@ -1,3 +1,11 @@
+4.11.0
+- 2024-10-17 boring-sys: include HPKE header file for bindgen
+- 2024-10-17 Add "fips-compat" feature
+- 2024-09-25 Create semgrep.yml
+
+4.10.3
+- 2024-09-21 Set MSRV to 1.70 (#279)
+
 4.10.2
 - 2024-09-18 boring-pq.patch Fix by not updating crypto_test_data.cc
 

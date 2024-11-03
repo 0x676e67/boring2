@@ -777,10 +777,10 @@ impl SslCurve {
 
 /// A compliance policy.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg(not(feature = "fips"))]
+#[cfg(not(feature = "fips-compat"))]
 pub struct CompliancePolicy(ffi::ssl_compliance_policy_t);
 
-#[cfg(not(feature = "fips"))]
+#[cfg(not(feature = "fips-compat"))]
 impl CompliancePolicy {
     /// Does nothing, however setting this does not undo other policies, so trying to set this is an error.
     pub const NONE: Self = Self(ffi::ssl_compliance_policy_t::ssl_compliance_policy_none);
@@ -1001,6 +1001,49 @@ impl SslContextBuilder {
     /// Returns a pointer to the raw OpenSSL value.
     pub fn as_ptr(&self) -> *mut ffi::SSL_CTX {
         self.ctx.as_ptr()
+    }
+
+    /// Registers a certificate verification callback that replaces the default verification
+    /// process.
+    ///
+    /// The callback returns true if the certificate chain is valid, and false if not.
+    /// A viable verification result value (either `Ok(())` or an `Err(X509VerifyError)`) must be
+    /// reflected in the error member of `X509StoreContextRef`, which can be done by calling
+    /// `X509StoreContextRef::set_error`. However, the callback's return value determines
+    /// whether the chain is accepted or not.
+    ///
+    /// *Warning*: Providing a complete verification procedure is a complex task. See
+    /// https://docs.openssl.org/master/man3/SSL_CTX_set_cert_verify_callback/#notes for more
+    /// information.
+    ///
+    /// TODO: Add the ability to unset the callback by either adding a new function or wrapping the
+    /// callback in an `Option`.
+    ///
+    /// # Panics
+    ///
+    /// This method panics if this `SslContext` is associated with a RPK context.
+    #[corresponds(SSL_CTX_set_cert_verify_callback)]
+    pub fn set_cert_verify_callback<F>(&mut self, callback: F)
+    where
+        F: Fn(&mut X509StoreContextRef) -> bool + 'static + Sync + Send,
+    {
+        #[cfg(feature = "rpk")]
+        assert!(!self.is_rpk, "This API is not supported for RPK");
+
+        // NOTE(jlarisch): Q: Why don't we wrap the callback in an Arc, since
+        // `set_verify_callback` does?
+        // A: I don't think that Arc is necessary, and I don't think one is necessary here.
+        // There's no way to get a mutable reference to the `Ssl` or `SslContext`, which
+        // is what you need to register a new callback.
+        // See the NOTE in `ssl_raw_verify` for confirmation.
+        self.replace_ex_data(SslContext::cached_ex_index::<F>(), callback);
+        unsafe {
+            ffi::SSL_CTX_set_cert_verify_callback(
+                self.as_ptr(),
+                Some(raw_cert_verify::<F>),
+                ptr::null_mut(),
+            );
+        }
     }
 
     /// Configures the certificate verification method for new connections.
@@ -1472,7 +1515,7 @@ impl SslContextBuilder {
     #[corresponds(SSL_CTX_set_alpn_protos)]
     pub fn set_alpn_protos(&mut self, protocols: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
-            #[cfg_attr(not(feature = "fips"), allow(clippy::unnecessary_cast))]
+            #[cfg_attr(not(feature = "fips-compat"), allow(clippy::unnecessary_cast))]
             {
                 assert!(protocols.len() <= ProtosLen::MAX as usize);
             }
@@ -1816,7 +1859,7 @@ impl SslContextBuilder {
     /// version of BoringSSL which doesn't yet include these APIs.
     /// Once the submoduled fips commit is upgraded, these gates can be removed.
     #[corresponds(SSL_CTX_set_permute_extensions)]
-    #[cfg(not(feature = "fips"))]
+    #[cfg(not(feature = "fips-compat"))]
     pub fn set_permute_extensions(&mut self, enabled: bool) {
         unsafe { ffi::SSL_CTX_set_permute_extensions(self.as_ptr(), enabled as _) }
     }
@@ -1891,7 +1934,7 @@ impl SslContextBuilder {
     ///
     /// This feature isn't available in the certified version of BoringSSL.
     #[corresponds(SSL_CTX_set_compliance_policy)]
-    #[cfg(not(feature = "fips"))]
+    #[cfg(not(feature = "fips-compat"))]
     pub fn set_compliance_policy(&mut self, policy: CompliancePolicy) -> Result<(), ErrorStack> {
         unsafe { cvt_0i(ffi::SSL_CTX_set_compliance_policy(self.as_ptr(), policy.0)).map(|_| ()) }
     }
@@ -2163,9 +2206,9 @@ impl SslContextRef {
 #[derive(Debug)]
 pub struct GetSessionPendingError;
 
-#[cfg(not(feature = "fips"))]
+#[cfg(not(feature = "fips-compat"))]
 type ProtosLen = usize;
-#[cfg(feature = "fips")]
+#[cfg(feature = "fips-compat")]
 type ProtosLen = libc::c_uint;
 
 /// Information about the state of a cipher.
@@ -2886,7 +2929,7 @@ impl SslRef {
     /// Note: This is gated to non-fips because the fips feature builds with a separate
     /// version of BoringSSL which doesn't yet include these APIs.
     /// Once the submoduled fips commit is upgraded, these gates can be removed.
-    #[cfg(not(feature = "fips"))]
+    #[cfg(not(feature = "fips-compat"))]
     pub fn set_permute_extensions(&mut self, enabled: bool) {
         unsafe { ffi::SSL_set_permute_extensions(self.as_ptr(), enabled as _) }
     }
@@ -2897,7 +2940,7 @@ impl SslRef {
     #[corresponds(SSL_set_alpn_protos)]
     pub fn set_alpn_protos(&mut self, protocols: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
-            #[cfg_attr(not(feature = "fips"), allow(clippy::unnecessary_cast))]
+            #[cfg_attr(not(feature = "fips-compat"), allow(clippy::unnecessary_cast))]
             {
                 assert!(protocols.len() <= ProtosLen::MAX as usize);
             }
