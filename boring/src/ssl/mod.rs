@@ -713,6 +713,9 @@ impl SslCurve {
         SslCurve(ffi::SSL_CURVE_X25519_KYBER768_DRAFT00 as _);
 
     #[cfg(feature = "pq-experimental")]
+    pub const X25519_MLKEM768: SslCurve = SslCurve(ffi::NID_X25519MLKEM768 as _);
+
+    #[cfg(feature = "pq-experimental")]
     pub const X25519_KYBER768_DRAFT00_OLD: SslCurve =
         SslCurve(ffi::SSL_CURVE_X25519_KYBER768_DRAFT00_OLD as _);
 
