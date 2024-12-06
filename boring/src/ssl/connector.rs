@@ -87,6 +87,18 @@ impl SslConnector {
         Ok(SslConnectorBuilder(ctx))
     }
 
+    /// Creates a new builder for TLS connections with no verification.
+    ///
+    /// This is useful for testing and other purposes where you want to skip verification.
+    pub fn no_default_verify_builder(method: SslMethod) -> Result<SslConnectorBuilder, ErrorStack> {
+        let mut ctx = ctx(ContextType::WithMethod(method))?;
+        ctx.set_cipher_list(
+            "DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK",
+        )?;
+
+        Ok(SslConnectorBuilder(ctx))
+    }
+
     /// Creates a new builder for TLS connections with raw public key.
     #[cfg(feature = "rpk")]
     pub fn rpk_builder() -> Result<SslConnectorBuilder, ErrorStack> {
