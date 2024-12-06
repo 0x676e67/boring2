@@ -148,6 +148,7 @@ impl SslConnector {
 }
 
 /// A builder for `SslConnector`s.
+#[derive(Clone)]
 pub struct SslConnectorBuilder(SslContextBuilder);
 
 impl SslConnectorBuilder {

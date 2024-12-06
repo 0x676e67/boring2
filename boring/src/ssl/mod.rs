@@ -910,6 +910,7 @@ extern "C" fn rpk_verify_failure_callback(
 }
 
 /// A builder for `SslContext`s.
+#[derive(Clone)]
 pub struct SslContextBuilder {
     ctx: SslContext,
     #[cfg(feature = "rpk")]
