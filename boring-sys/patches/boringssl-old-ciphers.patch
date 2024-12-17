@@ -1,9 +1,88 @@
-diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/internal.h boringssl/src/ssl/internal.h
---- boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/internal.h	2023-09-27 05:13:00.000000000 +0300
-+++ boringssl/src/ssl/internal.h	2024-02-29 20:02:32.711209565 +0200
-@@ -577,4 +577,9 @@
+diff --git a/src/ssl/handshake_client.cc b/src/ssl/handshake_client.cc
+index 971ebd0b1..e70e6c868 100644
+--- a/src/ssl/handshake_client.cc
++++ b/src/ssl/handshake_client.cc
+@@ -215,13 +215,15 @@ static void ssl_get_client_disabled(const SSL_HANDSHAKE *hs,
+   }
+ }
+ 
+-static bool ssl_add_tls13_cipher(CBB *cbb, uint16_t cipher_id,
+-                                 ssl_compliance_policy_t policy) {
+-  if (ssl_tls13_cipher_meets_policy(cipher_id, policy)) {
+-    return CBB_add_u16(cbb, cipher_id);
+-  }
+-  return true;
+-}
++// Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++// Compatible with some Firefox cipher sequence order
++// static bool ssl_add_tls13_cipher(CBB *cbb, uint16_t cipher_id,
++//                                  ssl_compliance_policy_t policy) {
++//   if (ssl_tls13_cipher_meets_policy(cipher_id, policy)) {
++//     return CBB_add_u16(cbb, cipher_id);
++//   }
++//   return true;
++// }
+ 
+ static bool ssl_write_client_cipher_list(const SSL_HANDSHAKE *hs, CBB *out,
+                                          ssl_client_hello_type_t type) {
+@@ -242,26 +244,28 @@ static bool ssl_write_client_cipher_list(const SSL_HANDSHAKE *hs, CBB *out,
+ 
+   // Add TLS 1.3 ciphers. Order ChaCha20-Poly1305 relative to AES-GCM based on
+   // hardware support.
+-  if (hs->max_version >= TLS1_3_VERSION) {
+-    const bool has_aes_hw = ssl->config->aes_hw_override
+-                                ? ssl->config->aes_hw_override_value
+-                                : EVP_has_aes_hardware();
+-
+-    if ((!has_aes_hw &&  //
+-         !ssl_add_tls13_cipher(&child,
+-                               TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
+-                               ssl->config->tls13_cipher_policy)) ||
+-        !ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_128_GCM_SHA256 & 0xffff,
+-                              ssl->config->tls13_cipher_policy) ||
+-        !ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_256_GCM_SHA384 & 0xffff,
+-                              ssl->config->tls13_cipher_policy) ||
+-        (has_aes_hw &&  //
+-         !ssl_add_tls13_cipher(&child,
+-                               TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
+-                               ssl->config->tls13_cipher_policy))) {
+-      return false;
+-    }
+-  }
++  // Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++  // Compatible with some Firefox cipher sequence order
++  // if (hs->max_version >= TLS1_3_VERSION) {
++  //   const bool has_aes_hw = ssl->config->aes_hw_override
++  //                               ? ssl->config->aes_hw_override_value
++  //                               : EVP_has_aes_hardware();
++
++  //   if ((!has_aes_hw &&  //
++  //        !ssl_add_tls13_cipher(&child,
++  //                              TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
++  //                              ssl->config->tls13_cipher_policy)) ||
++  //       !ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_128_GCM_SHA256 & 0xffff,
++  //                             ssl->config->tls13_cipher_policy) ||
++  //       !ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_256_GCM_SHA384 & 0xffff,
++  //                             ssl->config->tls13_cipher_policy) ||
++  //       (has_aes_hw &&  //
++  //        !ssl_add_tls13_cipher(&child,
++  //                              TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
++  //                              ssl->config->tls13_cipher_policy))) {
++  //     return false;
++  //   }
++  // }
+ 
+   if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
+     bool any_enabled = false;
+diff --git a/src/ssl/internal.h b/src/ssl/internal.h
+index 1e6da2153..045106263 100644
+--- a/src/ssl/internal.h
++++ b/src/ssl/internal.h
+@@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
+ // Bits for |algorithm_mac| (symmetric authentication).
+ #define SSL_SHA1 0x00000001u
  #define SSL_SHA256 0x00000002u
-+// curl-impersonate:
++// 
 +// SSL_SHA384 was removed in
 +// https://boringssl-review.googlesource.com/c/boringssl/+/27944/
 +// but restored to impersonate browsers with older ciphers.
@@ -12,12 +91,17 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 -#define SSL_AEAD 0x00000004u
 +#define SSL_AEAD 0x00000008u
  
-diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/ssl_cipher.cc boringssl/src/ssl/ssl_cipher.cc
---- boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/ssl_cipher.cc	2023-09-27 05:13:00.000000000 +0300
-+++ boringssl/src/ssl/ssl_cipher.cc	2024-02-29 20:02:32.711209565 +0200
-@@ -199,2 +199,33 @@
+ // Bits for |algorithm_prf| (handshake digest).
+ #define SSL_HANDSHAKE_MAC_DEFAULT 0x1
+diff --git a/src/ssl/ssl_cipher.cc b/src/ssl/ssl_cipher.cc
+index ebb075351..530edebb2 100644
+--- a/src/ssl/ssl_cipher.cc
++++ b/src/ssl/ssl_cipher.cc
+@@ -197,6 +197,37 @@ static constexpr SSL_CIPHER kCiphers[] = {
+      SSL_HANDSHAKE_MAC_DEFAULT,
+     },
  
-+    // curl-impersonate: Ciphers 3C, 3D were removed in
++    //  Ciphers 3C, 3D were removed in
 +    // https://boringssl-review.googlesource.com/c/boringssl/+/27944/
 +    // but restored here to impersonate browsers with older ciphers. They are
 +    // not expected to actually work; but just to be included in the TLS
@@ -49,9 +133,13 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +    },
 +
      // PSK cipher suites.
-@@ -289,2 +320,19 @@
  
-+    // curl-impersonate: Cipher C008 was missing from BoringSSL,
+     // Cipher 8C
+@@ -287,6 +318,23 @@ static constexpr SSL_CIPHER kCiphers[] = {
+       SSL_HANDSHAKE_MAC_SHA256,
+     },
+ 
++    //  Cipher C008 was missing from BoringSSL,
 +    // probably because it is weak. Add it back from OpenSSL (ssl/s3_lib.c)
 +    // where it is called ECDHE-ECDSA-DES-CBC3-SHA.
 +    // It's not supposed to really work but just appear in the TLS client hello.
@@ -69,9 +157,13 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +    },
 +
      // Cipher C009
-@@ -313,2 +361,17 @@
+     {
+      TLS1_TXT_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+@@ -311,6 +359,21 @@ static constexpr SSL_CIPHER kCiphers[] = {
+      SSL_HANDSHAKE_MAC_DEFAULT,
+     },
  
-+    // curl-impersonate: Cipher C012 was missing from BoringSSL,
++    //  Cipher C012 was missing from BoringSSL,
 +    // probably because it is weak. Add it back from OpenSSL (ssl/s3_lib.c)
 +    // where it is called ECDHE-RSA-DES-CBC3-SHA
 +    // It's not supposed to really work but just appear in the TLS client hello.
@@ -87,9 +179,13 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +    },
 +
      // Cipher C013
-@@ -337,2 +400,33 @@
+     {
+      TLS1_TXT_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+@@ -335,6 +398,37 @@ static constexpr SSL_CIPHER kCiphers[] = {
+      SSL_HANDSHAKE_MAC_DEFAULT,
+     },
  
-+    // curl-impersonate: Ciphers C023, C024, C028 were removed in
++    //  Ciphers C023, C024, C028 were removed in
 +    // https://boringssl-review.googlesource.com/c/boringssl/+/27944/
 +    // but restored here to impersonate browsers with older ciphers. They are
 +    // not expected to actually work; but just to be included in the TLS
@@ -121,7 +217,11 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +    },
 +
      // Cipher C027
-@@ -349,2 +443,14 @@
+     {
+      TLS1_TXT_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+@@ -347,6 +441,18 @@ static constexpr SSL_CIPHER kCiphers[] = {
+      SSL_HANDSHAKE_MAC_SHA256,
+     },
  
 +    // Cipher C028
 +    {
@@ -136,17 +236,52 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +    },
 +
      // GCM based TLS v1.2 ciphersuites from RFC 5289
-@@ -555,2 +661,7 @@
+ 
+     // Cipher C02B
+@@ -467,15 +573,17 @@ Span<const SSL_CIPHER> AllCiphers() {
+   return MakeConstSpan(kCiphers, OPENSSL_ARRAY_SIZE(kCiphers));
+ }
+ 
+-static constexpr size_t NumTLS13Ciphers() {
+-  size_t num = 0;
+-  for (const auto &cipher : kCiphers) {
+-    if (cipher.algorithm_mkey == SSL_kGENERIC) {
+-      num++;
+-    }
+-  }
+-  return num;
+-}
++// Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++// Compatible with some Firefox cipher sequence order
++// static constexpr size_t NumTLS13Ciphers() {
++//   size_t num = 0;
++//   for (const auto &cipher : kCiphers) {
++//     if (cipher.algorithm_mkey == SSL_kGENERIC) {
++//       num++;
++//     }
++//   }
++//   return num;
++// }
+ 
+ #define CIPHER_ADD 1
+ #define CIPHER_KILL 2
+@@ -549,6 +657,11 @@ static const CIPHER_ALIAS kCipherAliases[] = {
+ 
+     // MAC aliases
      {"SHA1", ~0u, ~0u, ~0u, SSL_SHA1, 0},
-+    // curl-impersonate:
++    // 
 +    // Removed in https://boringssl-review.googlesource.com/c/boringssl/+/27944/
 +    // but restored to impersonate browsers with older ciphers.
 +    {"SHA256", ~0u, ~0u, ~0u, SSL_SHA256, 0},
 +    {"SHA384", ~0u, ~0u, ~0u, SSL_SHA384, 0},
      {"SHA", ~0u, ~0u, ~0u, SSL_SHA1, 0},
-@@ -1170,2 +1281,10 @@
+ 
+     // Legacy protocol minimum version aliases. "TLSv1" is intentionally the
+@@ -1166,12 +1279,30 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+       TLS1_CK_RSA_WITH_AES_256_SHA & 0xffff,
+       TLS1_CK_PSK_WITH_AES_256_CBC_SHA & 0xffff,
        SSL3_CK_RSA_DES_192_CBC3_SHA & 0xffff,
-+      // curl-impersonate: add legacy cipehrs.
++      //  add legacy cipehrs.
 +      TLS1_CK_RSA_WITH_AES_128_SHA256 & 0xffff,
 +      TLS1_CK_RSA_WITH_AES_256_SHA256 & 0xffff,
 +      0x0300C008 & 0xffff,
@@ -154,11 +289,53 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 +      TLS1_CK_ECDHE_ECDSA_WITH_AES_128_SHA256 & 0xffff,
 +      TLS1_CK_ECDHE_ECDSA_WITH_AES_256_SHA384 & 0xffff,
 +      TLS1_CK_ECDHE_RSA_WITH_AES_256_SHA384 & 0xffff,
++  };
++  // Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++  // Compatible with some Firefox cipher sequence order
++  static const uint16_t kTLS13Ciphers[] = {
++      TLS1_3_CK_AES_128_GCM_SHA256 & 0xffff,
++      TLS1_3_CK_AES_256_GCM_SHA384 & 0xffff,
++      TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
    };
-diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/ssl_privkey.cc boringssl/src/ssl/ssl_privkey.cc
---- boringssl-d24a38200fef19150eef00cad35b138936c08767/src/ssl/ssl_privkey.cc	2023-09-27 05:13:00.000000000 +0300
-+++ boringssl/src/ssl/ssl_privkey.cc	2024-02-29 21:26:15.518023534 +0200
-@@ -560,40 +560,45 @@
+ 
+   // Set up a linked list of ciphers.
+-  CIPHER_ORDER co_list[OPENSSL_ARRAY_SIZE(kAESCiphers) +
+-                       OPENSSL_ARRAY_SIZE(kChaChaCiphers) +
+-                       OPENSSL_ARRAY_SIZE(kLegacyCiphers)];
++  // Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++  // Compatible with some Firefox cipher sequence order
++  // CIPHER_ORDER co_list[OPENSSL_ARRAY_SIZE(kAESCiphers) +
++  //                      OPENSSL_ARRAY_SIZE(kChaChaCiphers) +
++  //                      OPENSSL_ARRAY_SIZE(kLegacyCiphers)];
++  CIPHER_ORDER co_list[OPENSSL_ARRAY_SIZE(kCiphers)];
+   for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(co_list); i++) {
+     co_list[i].next =
+         i + 1 < OPENSSL_ARRAY_SIZE(co_list) ? &co_list[i + 1] : nullptr;
+@@ -1208,7 +1339,16 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+     assert(co_list[num - 1].cipher != nullptr);
+   }
+   assert(num == OPENSSL_ARRAY_SIZE(co_list));
+-  static_assert(OPENSSL_ARRAY_SIZE(co_list) + NumTLS13Ciphers() ==
++  // Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
++  // Compatible with some Firefox cipher sequence order
++  // static_assert(OPENSSL_ARRAY_SIZE(co_list) + NumTLS13Ciphers() ==
++  //                   OPENSSL_ARRAY_SIZE(kCiphers),
++  //               "Not all ciphers are included in the cipher order");
++  for (uint16_t id: kTLS13Ciphers) {
++    co_list[num++].cipher = SSL_get_cipher_by_value(id);
++    assert(co_list[num - 1].cipher != nullptr);
++  }
++  static_assert(OPENSSL_ARRAY_SIZE(co_list) ==
+                     OPENSSL_ARRAY_SIZE(kCiphers),
+                 "Not all ciphers are included in the cipher order");
+ 
+diff --git a/src/ssl/ssl_privkey.cc b/src/ssl/ssl_privkey.cc
+index 46bef32e8..a3f0c05bb 100644
+--- a/src/ssl/ssl_privkey.cc
++++ b/src/ssl/ssl_privkey.cc
+@@ -567,44 +567,49 @@ int SSL_is_signature_algorithm_rsa_pss(uint16_t sigalg) {
+   return alg != nullptr && alg->is_rsa_pss;
+ }
  
 -static int compare_uint16_t(const void *p1, const void *p2) {
 -  uint16_t u1 = *((const uint16_t *)p1);
@@ -193,7 +370,7 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 -
 -  return true;
 -}
-+// curl-impersonate: Remove the uniqueness check. Older Safari versions (15)
++//  Remove the uniqueness check. Older Safari versions (15)
 +// send out duplicated algorithm prefs.
 +// static int compare_uint16_t(const void *p1, const void *p2) {
 +//   uint16_t u1 = *((const uint16_t *)p1);
@@ -233,10 +410,12 @@ diff -u1 -Nar --exclude build --exclude tags boringssl-d24a38200fef19150eef00cad
 -  if (!sigalgs_unique(prefs)) {
 -    return false;
 -  }
-+  // curl-impersonate: Remove the uniqueness check. Older Safari versions (15)
++  //  Remove the uniqueness check. Older Safari versions (15)
 +  // send out duplicated algorithm prefs.
 +
 +  // if (!sigalgs_unique(prefs)) {
 +  //   return false;
 +  // }
  
+   // Check for invalid algorithms, and filter out |SSL_SIGN_RSA_PKCS1_MD5_SHA1|.
+   Array<uint16_t> filtered;
