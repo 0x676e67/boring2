@@ -774,6 +774,8 @@ impl SslCurve {
             ffi::SSL_CURVE_P256_KYBER768_DRAFT00 => Some(ffi::NID_P256Kyber768Draft00),
             #[cfg(feature = "pq-experimental")]
             ffi::SSL_CURVE_X25519_MLKEM768 => Some(ffi::NID_X25519MLKEM768),
+            ffi::SSL_CURVE_DHE2048 => Some(ffi::NID_secp224r1),
+            ffi::SSL_CURVE_DHE3072 => Some(ffi::NID_secp224r1),
             _ => None,
         }
     }
