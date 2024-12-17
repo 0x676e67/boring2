@@ -484,10 +484,10 @@ fn ensure_patches_applied(config: &Config) -> io::Result<()> {
     println!("cargo:warning=applying old ciphers patch to boringssl");
     apply_patch(config, "boringssl-old-ciphers.patch")?;
 
-    if config.features.pq_experimental {
-        println!("cargo:warning=applying experimental post quantum crypto patch to boringssl");
-        apply_patch(config, "boring-pq.patch")?;
-    }
+    // if config.features.pq_experimental {
+    //     println!("cargo:warning=applying experimental post quantum crypto patch to boringssl");
+    //     apply_patch(config, "boring-pq.patch")?;
+    // }
 
     if config.features.rpk {
         println!("cargo:warning=applying RPK patch to boringssl");
