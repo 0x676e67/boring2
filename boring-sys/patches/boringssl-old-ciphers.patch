@@ -94,7 +94,7 @@ index 1e6da2153..045106263 100644
  // Bits for |algorithm_prf| (handshake digest).
  #define SSL_HANDSHAKE_MAC_DEFAULT 0x1
 diff --git a/src/ssl/ssl_cipher.cc b/src/ssl/ssl_cipher.cc
-index ebb075351..530edebb2 100644
+index ebb075351..17fcaa13c 100644
 --- a/src/ssl/ssl_cipher.cc
 +++ b/src/ssl/ssl_cipher.cc
 @@ -197,6 +197,37 @@ static constexpr SSL_CIPHER kCiphers[] = {
@@ -311,9 +311,14 @@ index ebb075351..530edebb2 100644
    for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(co_list); i++) {
      co_list[i].next =
          i + 1 < OPENSSL_ARRAY_SIZE(co_list) ? &co_list[i + 1] : nullptr;
-@@ -1208,7 +1339,16 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+@@ -1207,8 +1338,17 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+     co_list[num++].cipher = SSL_get_cipher_by_value(id);
      assert(co_list[num - 1].cipher != nullptr);
    }
++  for (uint16_t id: kTLS13Ciphers) {
++    co_list[num++].cipher = SSL_get_cipher_by_value(id);
++    assert(co_list[num - 1].cipher != nullptr);
++  }
    assert(num == OPENSSL_ARRAY_SIZE(co_list));
 -  static_assert(OPENSSL_ARRAY_SIZE(co_list) + NumTLS13Ciphers() ==
 +  // Comment this part of the code to cancel the device AES encryption cipher sequence priority, which may affect performance.
@@ -321,10 +326,6 @@ index ebb075351..530edebb2 100644
 +  // static_assert(OPENSSL_ARRAY_SIZE(co_list) + NumTLS13Ciphers() ==
 +  //                   OPENSSL_ARRAY_SIZE(kCiphers),
 +  //               "Not all ciphers are included in the cipher order");
-+  for (uint16_t id: kTLS13Ciphers) {
-+    co_list[num++].cipher = SSL_get_cipher_by_value(id);
-+    assert(co_list[num - 1].cipher != nullptr);
-+  }
 +  static_assert(OPENSSL_ARRAY_SIZE(co_list) ==
                      OPENSSL_ARRAY_SIZE(kCiphers),
                  "Not all ciphers are included in the cipher order");
