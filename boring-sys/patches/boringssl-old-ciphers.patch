@@ -1,3 +1,112 @@
+diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
+index 53aa9b453..9d4a5ca2b 100644
+--- a/src/include/openssl/ssl.h
++++ b/src/include/openssl/ssl.h
+@@ -2378,6 +2378,8 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
+ #define SSL_CURVE_SECP521R1 25
+ #define SSL_CURVE_X25519 29
+ #define SSL_CURVE_X25519_KYBER768_DRAFT00 0x6399
++#define SSL_CURVE_FFDHE2048 256
++#define SSL_CURVE_FFDHE3072 257
+ 
+ // SSL_get_curve_id returns the ID of the curve used by |ssl|'s most recently
+ // completed handshake or 0 if not applicable.
+diff --git a/src/include/openssl/tls1.h b/src/include/openssl/tls1.h
+index 772fb87a3..4cb6b5667 100644
+--- a/src/include/openssl/tls1.h
++++ b/src/include/openssl/tls1.h
+@@ -181,6 +181,8 @@ extern "C" {
+ #define TLS1_AD_NO_APPLICATION_PROTOCOL 120
+ #define TLS1_AD_ECH_REQUIRED 121  // draft-ietf-tls-esni-13
+ 
++#define TLSEXT_TYPE_record_size_limit 28
++
+ // ExtensionType values from RFC 6066
+ #define TLSEXT_TYPE_server_name 0
+ #define TLSEXT_TYPE_status_request 5
+diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
+index 5ee280221..62d443e4d 100644
+--- a/src/ssl/extensions.cc
++++ b/src/ssl/extensions.cc
+@@ -2808,9 +2808,28 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+ static bool ext_delegated_credential_add_clienthello(
+     const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
+     ssl_client_hello_type_t type) {
++    CBB contents, data;
++    static const uint16_t signature_hash_algorithms[] = {
++    SSL_SIGN_ECDSA_SECP256R1_SHA256, SSL_SIGN_ECDSA_SECP384R1_SHA384,
++    SSL_SIGN_ECDSA_SECP521R1_SHA512, SSL_SIGN_ECDSA_SHA1 };
++    if (!CBB_add_u16(out, TLSEXT_TYPE_delegated_credential) ||
++            !CBB_add_u16_length_prefixed(out, &contents) ||
++            !CBB_add_u16_length_prefixed(&contents, &data)) {
++        return false;
++    }
++    
++    for (const uint16_t alg : signature_hash_algorithms) {
++        if (!CBB_add_u16(&data, alg)) {
++            return false;
++        }
++    }
++    if (!CBB_flush(out)) {
++        return false;
++    }
+   return true;
+ }
+ 
++
+ static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
+                                                        uint8_t *out_alert,
+                                                        CBS *contents) {
+@@ -3094,6 +3113,35 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+   return true;
+ }
+ 
++static bool record_size_limit_add_clienthello(const SSL_HANDSHAKE* hs, CBB* out,
++    CBB* out_compressible,
++    ssl_client_hello_type_t type) {
++    CBB data;
++    const uint16_t data_ = 0x4001;
++    if (!CBB_add_u16(out, TLSEXT_TYPE_record_size_limit) ||
++        !CBB_add_u16_length_prefixed(out, &data) || !CBB_add_u16(&data, data_) ||
++        !CBB_flush(out)) {
++        return false;
++    }
++    return true;
++  }
++
++static bool record_size_limit_parse_serverhello(SSL_HANDSHAKE* hs,
++    uint8_t* out_alert,
++    CBS* contents) {
++    return true;
++}
++
++static bool record_size_limit_parse_clienthello(SSL_HANDSHAKE* hs,
++    uint8_t* out_alert,
++    CBS* contents) {
++    return true;
++}
++
++static bool record_size_limit_add_serverhello(SSL_HANDSHAKE* hs, CBB* out) {
++    return true;
++}
++
+ // kExtensions contains all the supported extensions.
+ static const struct tls_extension kExtensions[] = {
+   {
+@@ -3267,6 +3315,13 @@ static const struct tls_extension kExtensions[] = {
+     ignore_parse_clienthello,
+     ext_alps_add_serverhello,
+   },
++  {
++    TLSEXT_TYPE_record_size_limit,
++    record_size_limit_add_clienthello,
++    record_size_limit_parse_serverhello,
++    record_size_limit_parse_clienthello,
++    record_size_limit_add_serverhello,
++  },
+ };
+ 
+ #define kNumExtensions (sizeof(kExtensions) / sizeof(struct tls_extension))
 diff --git a/src/ssl/handshake_client.cc b/src/ssl/handshake_client.cc
 index 971ebd0b1..e70e6c868 100644
 --- a/src/ssl/handshake_client.cc
@@ -330,6 +439,21 @@ index ebb075351..17fcaa13c 100644
                      OPENSSL_ARRAY_SIZE(kCiphers),
                  "Not all ciphers are included in the cipher order");
  
+diff --git a/src/ssl/ssl_key_share.cc b/src/ssl/ssl_key_share.cc
+index 09a9ad380..6574cebcb 100644
+--- a/src/ssl/ssl_key_share.cc
++++ b/src/ssl/ssl_key_share.cc
+@@ -292,6 +292,10 @@ constexpr NamedGroup kNamedGroups[] = {
+     {NID_X25519, SSL_CURVE_X25519, "X25519", "x25519"},
+     {NID_X25519Kyber768Draft00, SSL_CURVE_X25519_KYBER768_DRAFT00,
+      "X25519Kyber768Draft00", ""},
++
++    //unspport group but add them
++    {NID_secp224r1, SSL_CURVE_FFDHE2048, "dhe2048", "ffdhe2048"},
++    {NID_secp224r1, SSL_CURVE_FFDHE3072, "dhe3072", "ffdhe3072"},
+ };
+ 
+ }  // namespace
 diff --git a/src/ssl/ssl_privkey.cc b/src/ssl/ssl_privkey.cc
 index 46bef32e8..a3f0c05bb 100644
 --- a/src/ssl/ssl_privkey.cc
