@@ -4246,7 +4246,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..5394fc368 100644
+index 5ee280221..cf467baad 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4260,15 +4260,10 @@ index 5ee280221..5394fc368 100644
        return true;
      default:
        return false;
-@@ -2808,9 +2812,35 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2812,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
-+    // Delegated credentials are only supported in TLS 1.3.
-+    if (ssl_protocol_version(hs->ssl) < TLS1_3_VERSION) {
-+        return true;
-+    }
-+
 +    if (hs->config->delegated_credentials.empty()) {
 +        return true;
 +    }
@@ -4296,7 +4291,7 @@ index 5ee280221..5394fc368 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3124,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3119,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4336,7 +4331,7 @@ index 5ee280221..5394fc368 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3330,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3325,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
