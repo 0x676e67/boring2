@@ -1867,8 +1867,8 @@ impl SslContextBuilder {
 
     /// Sets whether the context should enable record size limit.
     #[corresponds(SSL_CTX_set_record_size_limit)]
-    pub fn set_record_size_limit_enabled(&mut self) {
-        unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr()) }
+    pub fn set_record_size_limit_enabled(&mut self, limit: u16) {
+        unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr(), limit as _) }
     }
 
     /// Configures whether ClientHello extensions should be permuted.
