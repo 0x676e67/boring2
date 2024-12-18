@@ -4235,7 +4235,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..cb75848ff 100644
+index 5ee280221..98238305b 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4285,7 +4285,7 @@ index 5ee280221..cb75848ff 100644
 +static bool record_size_limit_add_clienthello(const SSL_HANDSHAKE* hs, CBB* out,
 +    CBB* out_compressible,
 +    ssl_client_hello_type_t type) {
-+    if (hs->config->record_size_limit) {
++    if (!hs->config->record_size_limit) {
 +        return true;
 +    }
 +
