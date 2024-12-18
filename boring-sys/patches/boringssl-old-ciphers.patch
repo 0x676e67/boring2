@@ -4176,7 +4176,7 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..9f16b7f6c 100644
+index 53aa9b453..a76a4bf38 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -2378,6 +2378,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
@@ -4208,6 +4208,17 @@ index 53aa9b453..9f16b7f6c 100644
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
+@@ -4874,6 +4889,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+ // more convenient to codesearch for specific algorithm values.
+ OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
+ 
++// SSL_set_delegated_credentials sets the set of signature algorithms supported
++// by the client.
++OPENSSL_EXPORT int SSL_CTX_set_delegated_credentials(SSL_CTX *ctx, const char *str);
++
+ #define SSL_set_app_data(s, arg) (SSL_set_ex_data(s, 0, (char *)(arg)))
+ #define SSL_get_app_data(s) (SSL_get_ex_data(s, 0))
+ #define SSL_SESSION_set_app_data(s, a) \
 diff --git a/src/include/openssl/tls1.h b/src/include/openssl/tls1.h
 index 772fb87a3..4cb6b5667 100644
 --- a/src/include/openssl/tls1.h
@@ -4235,7 +4246,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..7d25f1023 100644
+index 5ee280221..5394fc368 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4249,14 +4260,21 @@ index 5ee280221..7d25f1023 100644
        return true;
      default:
        return false;
-@@ -2808,9 +2812,28 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2812,35 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
++    // Delegated credentials are only supported in TLS 1.3.
++    if (ssl_protocol_version(hs->ssl) < TLS1_3_VERSION) {
++        return true;
++    }
++
++    if (hs->config->delegated_credentials.empty()) {
++        return true;
++    }
++
 +    CBB contents, data;
-+    static const uint16_t signature_hash_algorithms[] = {
-+    SSL_SIGN_ECDSA_SECP256R1_SHA256, SSL_SIGN_ECDSA_SECP384R1_SHA384,
-+    SSL_SIGN_ECDSA_SECP521R1_SHA512, SSL_SIGN_ECDSA_SHA1 };
++    const Array<uint16_t>& signature_hash_algorithms = hs->config->delegated_credentials;
 +    if (!CBB_add_u16(out, TLSEXT_TYPE_delegated_credential) ||
 +            !CBB_add_u16_length_prefixed(out, &contents) ||
 +            !CBB_add_u16_length_prefixed(&contents, &data)) {
@@ -4278,7 +4296,7 @@ index 5ee280221..7d25f1023 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3117,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3124,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4318,7 +4336,7 @@ index 5ee280221..7d25f1023 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3323,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3330,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
@@ -4409,7 +4427,7 @@ index 971ebd0b1..e70e6c868 100644
    if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
      bool any_enabled = false;
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..fcb586101 100644
+index 1e6da2153..c4c4f5d12 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
@@ -4427,7 +4445,18 @@ index 1e6da2153..fcb586101 100644
  
  // Bits for |algorithm_prf| (handshake digest).
  #define SSL_HANDSHAKE_MAC_DEFAULT 0x1
-@@ -3128,6 +3133,9 @@ struct SSL_CONFIG {
+@@ -3058,6 +3063,10 @@ struct SSL_CONFIG {
+   // verify_sigalgs, if not empty, is the set of signature algorithms
+   // accepted from the peer in decreasing order of preference.
+   Array<uint16_t> verify_sigalgs;
++  
++  // delegated_credentials, if not empty, is the set of signature algorithms
++  // supported by the client.
++  Array<uint16_t> delegated_credentials;
+ 
+   // srtp_profiles is the list of configured SRTP protection profiles for
+   // DTLS-SRTP.
+@@ -3128,6 +3137,9 @@ struct SSL_CONFIG {
    // of support for AES hw. The value is only considered if |aes_hw_override| is
    // true.
    bool aes_hw_override_value : 1;
@@ -4437,7 +4466,18 @@ index 1e6da2153..fcb586101 100644
  };
  
  // From RFC 8446, used in determining PSK modes.
-@@ -3748,6 +3756,9 @@ struct ssl_ctx_st {
+@@ -3696,6 +3708,10 @@ struct ssl_ctx_st {
+   // accepted from the peer in decreasing order of preference.
+   bssl::Array<uint16_t> verify_sigalgs;
+ 
++  // delegated_credentials, if not empty, is the set of signature algorithms
++  // supported by the client.
++  bssl::Array<uint16_t> delegated_credentials;
++
+   // retain_only_sha256_of_client_certs is true if we should compute the SHA256
+   // hash of the peer's certificate and then discard it to save memory and
+   // session space. Only effective on the server side.
+@@ -3748,6 +3764,9 @@ struct ssl_ctx_st {
    // |aes_hw_override| is true.
    bool aes_hw_override_value : 1;
  
@@ -5301,10 +5341,20 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..e6304495b 100644
+index 838761af5..272a4e001 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
-@@ -684,6 +684,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -664,7 +664,8 @@ SSL *SSL_new(SSL_CTX *ctx) {
+   if (!ssl->config->supported_group_list.CopyFrom(ctx->supported_group_list) ||
+       !ssl->config->alpn_client_proto_list.CopyFrom(
+           ctx->alpn_client_proto_list) ||
+-      !ssl->config->verify_sigalgs.CopyFrom(ctx->verify_sigalgs)) {
++      !ssl->config->verify_sigalgs.CopyFrom(ctx->verify_sigalgs) ||
++      !ssl->config->delegated_credentials.CopyFrom(ctx->delegated_credentials)) {
+     return nullptr;
+   }
+ 
+@@ -684,6 +685,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
    ssl->config->signed_cert_timestamps_enabled =
        ctx->signed_cert_timestamps_enabled;
    ssl->config->ocsp_stapling_enabled = ctx->ocsp_stapling_enabled;
@@ -5312,7 +5362,7 @@ index 838761af5..e6304495b 100644
    ssl->config->handoff = ctx->handoff;
    ssl->quic_method = ctx->quic_method;
  
-@@ -2134,6 +2135,17 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -2134,6 +2136,17 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl->config->ocsp_stapling_enabled = true;
  }
  
@@ -5330,7 +5380,7 @@ index 838761af5..e6304495b 100644
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -3151,7 +3163,7 @@ namespace fips202205 {
+@@ -3151,7 +3164,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"
@@ -5340,7 +5390,7 @@ index 838761af5..e6304495b 100644
  static const uint16_t kSigAlgs[] = {
      SSL_SIGN_RSA_PKCS1_SHA256,
 diff --git a/src/ssl/ssl_privkey.cc b/src/ssl/ssl_privkey.cc
-index 46bef32e8..a3f0c05bb 100644
+index 46bef32e8..72db55d49 100644
 --- a/src/ssl/ssl_privkey.cc
 +++ b/src/ssl/ssl_privkey.cc
 @@ -567,44 +567,49 @@ int SSL_is_signature_algorithm_rsa_pss(uint16_t sigalg) {
@@ -5429,6 +5479,25 @@ index 46bef32e8..a3f0c05bb 100644
  
    // Check for invalid algorithms, and filter out |SSL_SIGN_RSA_PKCS1_MD5_SHA1|.
    Array<uint16_t> filtered;
+@@ -947,3 +952,18 @@ int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
+   return set_sigalg_prefs(&ssl->config->verify_sigalgs,
+                           MakeConstSpan(prefs, num_prefs));
+ }
++
++int SSL_CTX_set_delegated_credentials(SSL *ssl, const char *str) {
++    if (!ssl->config) {
++    OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
++    return 0;
++  }
++  
++  Array<uint16_t> sigalgs;
++  if (!parse_sigalgs_list(&sigalgs, str)) {
++    return 0;
++  }
++
++  return set_sigalg_prefs(&ssl->config->delegated_credentials,
++                          MakeConstSpan(sigalgs.data(), sigalgs.size()));
++}
 diff --git a/src/ssl/ssl_test.cc b/src/ssl/ssl_test.cc
 index ef43a9e98..22178b5f6 100644
 --- a/src/ssl/ssl_test.cc

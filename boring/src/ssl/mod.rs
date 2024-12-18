@@ -1871,6 +1871,16 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr(), limit as _) }
     }
 
+    /// Sets delegated_credentials
+    #[corresponds(SSL_CTX_set_delegated_credentials)]
+    pub fn set_delegated_credentials(&mut self, sigalgs: &str) -> Result<(), ErrorStack> {
+        let sigalgs = CString::new(sigalgs).unwrap();
+        unsafe {
+            cvt(ffi::SSL_CTX_set_delegated_credentials(self.as_ptr(), sigalgs.as_ptr()) as c_int)
+                .map(|_| ())
+        }
+    }
+
     /// Configures whether ClientHello extensions should be permuted.
     ///
     /// Note: This is gated to non-fips because the fips feature builds with a separate
