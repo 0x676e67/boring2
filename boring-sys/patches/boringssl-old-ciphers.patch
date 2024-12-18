@@ -5508,7 +5508,7 @@ index 838761af5..5eaa8953b 100644
  static const uint16_t kSigAlgs[] = {
      SSL_SIGN_RSA_PKCS1_SHA256,
 diff --git a/src/ssl/ssl_privkey.cc b/src/ssl/ssl_privkey.cc
-index 46bef32e8..72db55d49 100644
+index 46bef32e8..193ca5c84 100644
 --- a/src/ssl/ssl_privkey.cc
 +++ b/src/ssl/ssl_privkey.cc
 @@ -567,44 +567,49 @@ int SSL_is_signature_algorithm_rsa_pss(uint16_t sigalg) {
@@ -5597,23 +5597,18 @@ index 46bef32e8..72db55d49 100644
  
    // Check for invalid algorithms, and filter out |SSL_SIGN_RSA_PKCS1_MD5_SHA1|.
    Array<uint16_t> filtered;
-@@ -947,3 +952,18 @@ int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
+@@ -947,3 +952,13 @@ int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
    return set_sigalg_prefs(&ssl->config->verify_sigalgs,
                            MakeConstSpan(prefs, num_prefs));
  }
 +
-+int SSL_CTX_set_delegated_credentials(SSL *ssl, const char *str) {
-+    if (!ssl->config) {
-+    OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
-+    return 0;
-+  }
-+  
++int SSL_CTX_set_delegated_credentials(SSL_CTX *ctx, const char *str) {  
 +  Array<uint16_t> sigalgs;
 +  if (!parse_sigalgs_list(&sigalgs, str)) {
 +    return 0;
 +  }
 +
-+  return set_sigalg_prefs(&ssl->config->delegated_credentials,
++  return set_sigalg_prefs(&ctx->delegated_credentials,
 +                          MakeConstSpan(sigalgs.data(), sigalgs.size()));
 +}
 diff --git a/src/ssl/ssl_test.cc b/src/ssl/ssl_test.cc
