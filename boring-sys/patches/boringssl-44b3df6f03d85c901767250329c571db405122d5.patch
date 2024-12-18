@@ -4228,7 +4228,7 @@ index 53aa9b453..3791dfe5d 100644
  #define SSL_get_app_data(s) (SSL_get_ex_data(s, 0))
  #define SSL_SESSION_set_app_data(s, a) \
 diff --git a/src/include/openssl/tls1.h b/src/include/openssl/tls1.h
-index 772fb87a3..4cb6b5667 100644
+index 772fb87a3..511793068 100644
 --- a/src/include/openssl/tls1.h
 +++ b/src/include/openssl/tls1.h
 @@ -181,6 +181,8 @@ extern "C" {
@@ -4240,6 +4240,14 @@ index 772fb87a3..4cb6b5667 100644
  // ExtensionType values from RFC 6066
  #define TLSEXT_TYPE_server_name 0
  #define TLSEXT_TYPE_status_request 5
+@@ -286,6 +288,7 @@ extern "C" {
+ // From https://www.rfc-editor.org/rfc/rfc8879.html#section-3
+ #define TLSEXT_cert_compression_zlib 1
+ #define TLSEXT_cert_compression_brotli 2
++#define TLSEXT_cert_compression_zstd 3
+ 
+ #define TLSEXT_MAXLEN_host_name 255
+ 
 diff --git a/src/sources.cmake b/src/sources.cmake
 index 5c7e881bf..3c0770cf3 100644
 --- a/src/sources.cmake
