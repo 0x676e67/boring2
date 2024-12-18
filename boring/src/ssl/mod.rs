@@ -1871,7 +1871,7 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr(), limit as _) }
     }
 
-    /// Sets delegated_credentials
+    /// Sets whether the context should enable delegated credentials.
     #[corresponds(SSL_CTX_set_delegated_credentials)]
     pub fn set_delegated_credentials(&mut self, sigalgs: &str) -> Result<(), ErrorStack> {
         let sigalgs = CString::new(sigalgs).unwrap();
