@@ -4176,7 +4176,7 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..a596714b3 100644
+index 53aa9b453..3791dfe5d 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -2378,6 +2378,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
@@ -4193,7 +4193,7 @@ index 53aa9b453..a596714b3 100644
  
  // SSL_get_curve_id returns the ID of the curve used by |ssl|'s most recently
  // completed handshake or 0 if not applicable.
-@@ -4570,6 +4577,14 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4570,6 +4577,22 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
@@ -4205,10 +4205,18 @@ index 53aa9b453..a596714b3 100644
 +// send record size limit extension.
 +OPENSSL_EXPORT void SSL_CTX_set_record_size_limit(SSL_CTX *ctx, uint16_t limit);
 +
++// SSL_set_enable_three_key_shares configures whether sockets on |ssl| should
++// send three key shares.
++OPENSSL_EXPORT void SSL_set_enable_three_key_shares(SSL *ssl);
++
++// SSL_CTX_set_enable_three_key_shares configures whether sockets on |ctx| should
++// send three key shares.
++OPENSSL_EXPORT void SSL_CTX_set_enable_three_key_shares(SSL_CTX *ctx);
++
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -4874,6 +4889,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -4874,6 +4897,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -4246,7 +4254,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..cf467baad 100644
+index 5ee280221..736752174 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4260,7 +4268,71 @@ index 5ee280221..cf467baad 100644
        return true;
      default:
        return false;
-@@ -2808,9 +2812,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2273,7 +2277,9 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+   SSL *const ssl = hs->ssl;
+   hs->key_shares[0].reset();
+   hs->key_shares[1].reset();
++  hs->key_shares[2].reset();
+   hs->key_share_bytes.Reset();
++  const bool enable_three_key_shares = hs->ssl->config->three_key_shares;
+ 
+   if (hs->max_version < TLS1_3_VERSION) {
+     return true;
+@@ -2295,6 +2301,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+ 
+   uint16_t group_id = override_group_id;
+   uint16_t second_group_id = 0;
++  uint16_t third_group_id = 0;
++
+   if (override_group_id == 0) {
+     // Predict the most preferred group.
+     Span<const uint16_t> groups = tls1_get_grouplist(hs);
+@@ -2305,12 +2313,22 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+ 
+     group_id = groups[0];
+ 
+-    // We'll try to include one post-quantum and one classical initial key
+-    // share.
+-    for (size_t i = 1; i < groups.size() && second_group_id == 0; i++) {
+-      if (is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
++    // Include one post-quantum and one classical initial key share.
++    for (size_t i = 1; i < groups.size(); i++) {
++      if (second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
+         second_group_id = groups[i];
+-        assert(second_group_id != group_id);
++      } else if (enable_three_key_shares && third_group_id == 0 && 
++                 !is_post_quantum_group(groups[i]) && 
++                 !is_post_quantum_group(group_id)) {
++        third_group_id = groups[i];
++      }
++
++      if (!enable_three_key_shares && second_group_id != 0) {
++        break; // Stop after finding the second group if three shares are not enabled.
++      }
++
++      if (enable_three_key_shares && second_group_id != 0 && third_group_id != 0) {
++        break; // Stop after finding all three groups.
+       }
+     }
+   }
+@@ -2334,6 +2352,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+     }
+   }
+ 
++  if (enable_three_key_shares && third_group_id != 0) {
++    hs->key_shares[2] = SSLKeyShare::Create(third_group_id);
++    if (!hs->key_shares[2] ||  //
++        !CBB_add_u16(cbb.get(), third_group_id) ||
++        !CBB_add_u16_length_prefixed(cbb.get(), &key_exchange) ||
++        !hs->key_shares[2]->Generate(&key_exchange)) {
++      return false;
++    }
++  }
++
+   return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
+ }
+ 
+@@ -2808,9 +2836,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4291,7 +4363,7 @@ index 5ee280221..cf467baad 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3119,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3143,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4331,7 +4403,7 @@ index 5ee280221..cf467baad 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3325,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3349,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
@@ -4422,7 +4494,7 @@ index 971ebd0b1..e70e6c868 100644
    if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
      bool any_enabled = false;
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..c4c4f5d12 100644
+index 1e6da2153..95e94e5ad 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
@@ -4440,6 +4512,15 @@ index 1e6da2153..c4c4f5d12 100644
  
  // Bits for |algorithm_prf| (handshake digest).
  #define SSL_HANDSHAKE_MAC_DEFAULT 0x1
+@@ -1818,7 +1823,7 @@ struct SSL_HANDSHAKE {
+   // key_shares are the current key exchange instances. The second is only used
+   // as a client if we believe that we should offer two key shares in a
+   // ClientHello.
+-  UniquePtr<SSLKeyShare> key_shares[2];
++  UniquePtr<SSLKeyShare> key_shares[3];
+ 
+   // transcript is the current handshake transcript.
+   SSLTranscript transcript;
 @@ -3058,6 +3063,10 @@ struct SSL_CONFIG {
    // verify_sigalgs, if not empty, is the set of signature algorithms
    // accepted from the peer in decreasing order of preference.
@@ -4451,17 +4532,20 @@ index 1e6da2153..c4c4f5d12 100644
  
    // srtp_profiles is the list of configured SRTP protection profiles for
    // DTLS-SRTP.
-@@ -3128,6 +3137,9 @@ struct SSL_CONFIG {
+@@ -3128,6 +3137,12 @@ struct SSL_CONFIG {
    // of support for AES hw. The value is only considered if |aes_hw_override| is
    // true.
    bool aes_hw_override_value : 1;
 +
 +  // record_size_limit is whether to send record size limit extension.
 +  uint16_t record_size_limit = 0;
++
++  // enable_three_key_shares is whether to send three key shares.
++  bool three_key_shares : 1;
  };
  
  // From RFC 8446, used in determining PSK modes.
-@@ -3696,6 +3708,10 @@ struct ssl_ctx_st {
+@@ -3696,6 +3711,10 @@ struct ssl_ctx_st {
    // accepted from the peer in decreasing order of preference.
    bssl::Array<uint16_t> verify_sigalgs;
  
@@ -4472,12 +4556,15 @@ index 1e6da2153..c4c4f5d12 100644
    // retain_only_sha256_of_client_certs is true if we should compute the SHA256
    // hash of the peer's certificate and then discard it to save memory and
    // session space. Only effective on the server side.
-@@ -3748,6 +3764,9 @@ struct ssl_ctx_st {
+@@ -3748,6 +3767,12 @@ struct ssl_ctx_st {
    // |aes_hw_override| is true.
    bool aes_hw_override_value : 1;
  
 +  // record_size_limit is whether to send record size limit extension.
 +  uint16_t record_size_limit = 0;
++
++  // enable_three_key_shares is whether to send three key shares.
++  bool three_key_shares : 1;
 +
   private:
    ~ssl_ctx_st();
@@ -5336,10 +5423,25 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..272a4e001 100644
+index 838761af5..5eaa8953b 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
-@@ -664,7 +664,8 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
+       handoff(false),
+       enable_early_data(false),
+       aes_hw_override(false),
+-      aes_hw_override_value(false) {
++      aes_hw_override_value(false),
++      three_key_shares(false) {
+   CRYPTO_MUTEX_init(&lock);
+   CRYPTO_new_ex_data(&ex_data);
+ }
+@@ -660,11 +661,13 @@ SSL *SSL_new(SSL_CTX *ctx) {
+   ssl->config->aes_hw_override = ctx->aes_hw_override;
+   ssl->config->aes_hw_override_value = ctx->aes_hw_override_value;
+   ssl->config->tls13_cipher_policy = ctx->tls13_cipher_policy;
++  ssl->config->three_key_shares = ctx->three_key_shares;
+ 
    if (!ssl->config->supported_group_list.CopyFrom(ctx->supported_group_list) ||
        !ssl->config->alpn_client_proto_list.CopyFrom(
            ctx->alpn_client_proto_list) ||
@@ -5349,7 +5451,7 @@ index 838761af5..272a4e001 100644
      return nullptr;
    }
  
-@@ -684,6 +685,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -684,6 +687,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
    ssl->config->signed_cert_timestamps_enabled =
        ctx->signed_cert_timestamps_enabled;
    ssl->config->ocsp_stapling_enabled = ctx->ocsp_stapling_enabled;
@@ -5357,7 +5459,17 @@ index 838761af5..272a4e001 100644
    ssl->config->handoff = ctx->handoff;
    ssl->quic_method = ctx->quic_method;
  
-@@ -2134,6 +2136,17 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -707,7 +711,8 @@ SSL_CONFIG::SSL_CONFIG(SSL *ssl_arg)
+       shed_handshake_config(false),
+       jdk11_workaround(false),
+       quic_use_legacy_codepoint(false),
+-      permute_extensions(false) {
++      permute_extensions(false),
++      three_key_shares(false) {
+   assert(ssl);
+ }
+ 
+@@ -2134,6 +2139,28 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl->config->ocsp_stapling_enabled = true;
  }
  
@@ -5372,10 +5484,21 @@ index 838761af5..272a4e001 100644
 +  ctx->record_size_limit = limit;
 +}
 +
++void SSL_set_enable_three_key_shares(SSL *ssl) {
++  if (!ssl->config) {
++    return;
++  }
++  ssl->config->three_key_shares = true;
++}
++
++void SSL_CTX_set_enable_three_key_shares(SSL_CTX *ctx) {
++  ctx->three_key_shares = true;
++}
++
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -3151,7 +3164,7 @@ namespace fips202205 {
+@@ -3151,7 +3178,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"
@@ -5385,7 +5508,7 @@ index 838761af5..272a4e001 100644
  static const uint16_t kSigAlgs[] = {
      SSL_SIGN_RSA_PKCS1_SHA256,
 diff --git a/src/ssl/ssl_privkey.cc b/src/ssl/ssl_privkey.cc
-index 46bef32e8..193ca5c84 100644
+index 46bef32e8..72db55d49 100644
 --- a/src/ssl/ssl_privkey.cc
 +++ b/src/ssl/ssl_privkey.cc
 @@ -567,44 +567,49 @@ int SSL_is_signature_algorithm_rsa_pss(uint16_t sigalg) {
@@ -5474,18 +5597,23 @@ index 46bef32e8..193ca5c84 100644
  
    // Check for invalid algorithms, and filter out |SSL_SIGN_RSA_PKCS1_MD5_SHA1|.
    Array<uint16_t> filtered;
-@@ -947,3 +952,13 @@ int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
+@@ -947,3 +952,18 @@ int SSL_set_verify_algorithm_prefs(SSL *ssl, const uint16_t *prefs,
    return set_sigalg_prefs(&ssl->config->verify_sigalgs,
                            MakeConstSpan(prefs, num_prefs));
  }
 +
-+int SSL_CTX_set_delegated_credentials(SSL_CTX *ctx, const char *str) {  
++int SSL_CTX_set_delegated_credentials(SSL *ssl, const char *str) {
++    if (!ssl->config) {
++    OPENSSL_PUT_ERROR(SSL, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
++    return 0;
++  }
++  
 +  Array<uint16_t> sigalgs;
 +  if (!parse_sigalgs_list(&sigalgs, str)) {
 +    return 0;
 +  }
 +
-+  return set_sigalg_prefs(&ctx->delegated_credentials,
++  return set_sigalg_prefs(&ssl->config->delegated_credentials,
 +                          MakeConstSpan(sigalgs.data(), sigalgs.size()));
 +}
 diff --git a/src/ssl/ssl_test.cc b/src/ssl/ssl_test.cc

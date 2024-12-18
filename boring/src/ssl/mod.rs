@@ -1881,6 +1881,12 @@ impl SslContextBuilder {
         }
     }
 
+    /// Sets whether the context should enable there key share extension.
+    #[corresponds(SSL_CTX_set_enable_three_key_shares)]
+    pub fn set_enable_three_key_shares(&mut self) {
+        unsafe { ffi::SSL_CTX_set_enable_three_key_shares(self.as_ptr()) }
+    }
+
     /// Configures whether ClientHello extensions should be permuted.
     ///
     /// Note: This is gated to non-fips because the fips feature builds with a separate
