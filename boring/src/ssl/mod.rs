@@ -1865,6 +1865,12 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_grease_enabled(self.as_ptr(), enabled as _) }
     }
 
+    /// Sets whether the context should enable record size limit.
+    #[corresponds(SSL_CTX_set_record_size_limit)]
+    pub fn set_record_size_limit_enabled(&mut self) {
+        unsafe { ffi::SSL_CTX_set_record_size_limit(self.as_ptr()) }
+    }
+
     /// Configures whether ClientHello extensions should be permuted.
     ///
     /// Note: This is gated to non-fips because the fips feature builds with a separate
