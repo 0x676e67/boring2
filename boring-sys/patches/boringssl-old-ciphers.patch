@@ -4254,7 +4254,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..736752174 100644
+index 5ee280221..9a55a6b54 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4287,7 +4287,7 @@ index 5ee280221..736752174 100644
    if (override_group_id == 0) {
      // Predict the most preferred group.
      Span<const uint16_t> groups = tls1_get_grouplist(hs);
-@@ -2305,12 +2313,22 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2305,12 +2313,21 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
      group_id = groups[0];
  
@@ -4301,8 +4301,7 @@ index 5ee280221..736752174 100644
          second_group_id = groups[i];
 -        assert(second_group_id != group_id);
 +      } else if (enable_three_key_shares && third_group_id == 0 && 
-+                 !is_post_quantum_group(groups[i]) && 
-+                 !is_post_quantum_group(group_id)) {
++                 is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +        third_group_id = groups[i];
 +      }
 +
@@ -4315,7 +4314,7 @@ index 5ee280221..736752174 100644
        }
      }
    }
-@@ -2334,6 +2352,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2334,6 +2351,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
      }
    }
  
@@ -4332,7 +4331,7 @@ index 5ee280221..736752174 100644
    return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
  }
  
-@@ -2808,9 +2836,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2835,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4363,7 +4362,7 @@ index 5ee280221..736752174 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3143,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3142,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4403,7 +4402,7 @@ index 5ee280221..736752174 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3349,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3348,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
