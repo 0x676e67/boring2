@@ -4262,7 +4262,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..a23e5b255 100644
+index 5ee280221..9b3f03c4c 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4330,20 +4330,11 @@ index 5ee280221..a23e5b255 100644
    CBB key_exchange;
    hs->key_shares[0] = SSLKeyShare::Create(group_id);
    if (!hs->key_shares[0] ||  //
-@@ -2324,7 +2345,7 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
-     return false;
-   }
- 
--  if (second_group_id != 0) {
-+  if (limit == 2 && second_group_id != 0) {
-     hs->key_shares[1] = SSLKeyShare::Create(second_group_id);
-     if (!hs->key_shares[1] ||  //
-         !CBB_add_u16(cbb.get(), second_group_id) ||
 @@ -2334,6 +2355,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
      }
    }
  
-+  if (limit == 3 && third_group_id != 0) {
++  if (third_group_id != 0) {
 +    hs->key_shares[2] = SSLKeyShare::Create(third_group_id);
 +    if (!hs->key_shares[2] ||  //
 +        !CBB_add_u16(cbb.get(), third_group_id) ||
