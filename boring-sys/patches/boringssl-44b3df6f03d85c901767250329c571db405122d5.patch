@@ -4262,7 +4262,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..9b3f03c4c 100644
+index 5ee280221..2b08aef4b 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4276,18 +4276,19 @@ index 5ee280221..9b3f03c4c 100644
        return true;
      default:
        return false;
-@@ -2273,7 +2277,10 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2273,7 +2277,11 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
    SSL *const ssl = hs->ssl;
    hs->key_shares[0].reset();
    hs->key_shares[1].reset();
 +  hs->key_shares[2].reset();
    hs->key_share_bytes.Reset();
-+  const uint8_t key_shares_limit = hs->ssl->config->key_shares_limit;
-+  const uint8_t limit = (key_shares_limit >= 1 && key_shares_limit <= 3) ? key_shares_limit : 2;
++  const uint8_t limit = std::clamp(hs->ssl->config->key_shares_limit, uint8_t(1), uint8_t(3));
++  const bool enable_second_key_share = (limit == 2);
++  const bool enable_three_key_shares = (limit == 3);
  
    if (hs->max_version < TLS1_3_VERSION) {
      return true;
-@@ -2295,6 +2302,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2295,6 +2303,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
    uint16_t group_id = override_group_id;
    uint16_t second_group_id = 0;
@@ -4296,7 +4297,7 @@ index 5ee280221..9b3f03c4c 100644
    if (override_group_id == 0) {
      // Predict the most preferred group.
      Span<const uint16_t> groups = tls1_get_grouplist(hs);
-@@ -2305,16 +2314,28 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2305,16 +2315,28 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
      group_id = groups[0];
  
@@ -4306,21 +4307,21 @@ index 5ee280221..9b3f03c4c 100644
 -      if (is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +    // Include one post-quantum and one classical initial key share.
 +    for (size_t i = 1; i < groups.size(); i++) {
-+      if (limit == 2 && second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
++      if (enable_second_key_share && second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
          second_group_id = groups[i];
          assert(second_group_id != group_id);
-+      } else if (limit == 3 && third_group_id == 0 && 
++      } else if (enable_three_key_shares && third_group_id == 0 && 
 +                 is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +        third_group_id = groups[i];
 +      }
 +
 +      // Stop after finding the second group if three shares are not enabled.
-+      if (limit == 3 && second_group_id != 0) {
++      if (!enable_three_key_shares && second_group_id != 0) {
 +        break; 
 +      }
 +
 +      // Stop after finding all three groups.
-+      if (limit == 3 && second_group_id != 0 && third_group_id != 0) {
++      if (enable_three_key_shares && second_group_id != 0 && third_group_id != 0) {
 +        break; 
        }
      }
@@ -4330,7 +4331,7 @@ index 5ee280221..9b3f03c4c 100644
    CBB key_exchange;
    hs->key_shares[0] = SSLKeyShare::Create(group_id);
    if (!hs->key_shares[0] ||  //
-@@ -2334,6 +2355,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2334,6 +2356,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
      }
    }
  
@@ -4347,7 +4348,7 @@ index 5ee280221..9b3f03c4c 100644
    return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
  }
  
-@@ -2808,9 +2839,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2840,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4378,7 +4379,7 @@ index 5ee280221..9b3f03c4c 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3146,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3147,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4418,7 +4419,7 @@ index 5ee280221..9b3f03c4c 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3352,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3353,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
