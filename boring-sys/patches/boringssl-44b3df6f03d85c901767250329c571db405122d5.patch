@@ -5490,7 +5490,7 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..d115be52b 100644
+index 838761af5..93447106f 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -5580,7 +5580,7 @@ index 838761af5..d115be52b 100644
 +  }
 +
 +  for (size_t i = 0; i < permutation_len; ++i) {
-+    arr[i] = permutation[i] - 1;
++    arr[i] = permutation[i];
 +  }
 +
 +  ctx->extension_permutation = std::move(arr);
