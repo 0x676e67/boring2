@@ -1931,6 +1931,7 @@ impl SslContextBuilder {
                 indices.push(index as u8);
             }
         }
+        
         unsafe {
             cvt(ffi::SSL_CTX_set_extension_permutation(
                 self.as_ptr(),
