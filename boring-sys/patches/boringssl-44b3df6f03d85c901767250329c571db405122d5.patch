@@ -4176,7 +4176,7 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..5470b863e 100644
+index 53aa9b453..f86ae1b47 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -2378,6 +2378,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
@@ -4193,10 +4193,15 @@ index 53aa9b453..5470b863e 100644
  
  // SSL_get_curve_id returns the ID of the curve used by |ssl|'s most recently
  // completed handshake or 0 if not applicable.
-@@ -4570,6 +4577,22 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4570,6 +4577,27 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
++// SSL_CTX_set_extension_permutation configures whether sockets on |ctx| should
++// permute extensions. For now, this is only implemented for the ClientHello.
++OPENSSL_EXPORT int SSL_CTX_set_extension_permutation(SSL_CTX* ctx, const uint8_t *permutation,
++                                       size_t permutation_len);
++
 +// SSL_set_record_size_limit configures whether sockets on |ssl| should
 +// send record size limit extension.
 +OPENSSL_EXPORT void SSL_set_record_size_limit(SSL *ssl, uint16_t limit);
@@ -4216,7 +4221,7 @@ index 53aa9b453..5470b863e 100644
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -4874,6 +4897,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -4874,6 +4902,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -4262,7 +4267,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..b4a33cc11 100644
+index 5ee280221..dd1284d18 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4427,6 +4432,55 @@ index 5ee280221..b4a33cc11 100644
  };
  
  #define kNumExtensions (sizeof(kExtensions) / sizeof(struct tls_extension))
+@@ -3280,6 +3367,12 @@ static_assert(kNumExtensions <=
+ 
+ bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs) {
+   if (!hs->config->permute_extensions) {
++    if (!hs->ssl->ctx->extension_permutation.empty()) {
++        Array<uint8_t> permutation;
++        permutation.Init(hs->ssl->ctx->extension_permutation.size());
++        permutation.CopyFrom(hs->ssl->ctx->extension_permutation);
++        hs->extension_permutation = std::move(permutation);
++    }
+     return true;
+   }
+ 
+@@ -3357,10 +3450,16 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
+     }
+   }
+ 
+-  for (size_t unpermuted = 0; unpermuted < kNumExtensions; unpermuted++) {
++  const size_t numExtensions = hs->extension_permutation.empty()
++      ? kNumExtensions
++      : hs->extension_permutation.size();
++  for (size_t unpermuted = 0; unpermuted < numExtensions; unpermuted++) {
+     size_t i = hs->extension_permutation.empty()
+                    ? unpermuted
+                    : hs->extension_permutation[unpermuted];
++    if (i >= kNumExtensions) {
++      continue;
++    }
+     const size_t len_before = CBB_len(&extensions);
+     const size_t len_compressed_before = CBB_len(compressed.get());
+     if (!kExtensions[i].add_clienthello(hs, &extensions, compressed.get(),
+@@ -3466,10 +3565,16 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
+   }
+ 
+   bool last_was_empty = false;
+-  for (size_t unpermuted = 0; unpermuted < kNumExtensions; unpermuted++) {
++  const size_t numExtensions = hs->extension_permutation.empty()
++      ? kNumExtensions
++      : hs->extension_permutation.size();
++  for (size_t unpermuted = 0; unpermuted < numExtensions; unpermuted++) {
+     size_t i = hs->extension_permutation.empty()
+                    ? unpermuted
+                    : hs->extension_permutation[unpermuted];
++    if (i >= kNumExtensions) {
++        continue;
++    }
+     const size_t len_before = CBB_len(&extensions);
+     if (!kExtensions[i].add_clienthello(hs, &extensions, &extensions, type)) {
+       OPENSSL_PUT_ERROR(SSL, SSL_R_ERROR_ADDING_EXTENSION);
 diff --git a/src/ssl/handshake_client.cc b/src/ssl/handshake_client.cc
 index 971ebd0b1..e70e6c868 100644
 --- a/src/ssl/handshake_client.cc
@@ -4504,7 +4558,7 @@ index 971ebd0b1..e70e6c868 100644
    if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
      bool any_enabled = false;
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..a46e94b91 100644
+index 1e6da2153..f931d3f7a 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
@@ -4566,7 +4620,7 @@ index 1e6da2153..a46e94b91 100644
    // retain_only_sha256_of_client_certs is true if we should compute the SHA256
    // hash of the peer's certificate and then discard it to save memory and
    // session space. Only effective on the server side.
-@@ -3748,6 +3767,12 @@ struct ssl_ctx_st {
+@@ -3748,6 +3767,15 @@ struct ssl_ctx_st {
    // |aes_hw_override| is true.
    bool aes_hw_override_value : 1;
  
@@ -4575,6 +4629,9 @@ index 1e6da2153..a46e94b91 100644
 +
 +  // key_shares limit is the maximum number of key shares to send.
 +  uint8_t key_shares_limit = 0;
++
++  // extension_permutation is the permutation of extensions to send.
++  bssl::Array<uint8_t> extension_permutation;
 +
   private:
    ~ssl_ctx_st();
@@ -5433,7 +5490,7 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..a467a6d01 100644
+index 838761af5..d115be52b 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -5508,7 +5565,32 @@ index 838761af5..a467a6d01 100644
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -3151,7 +3178,7 @@ namespace fips202205 {
+@@ -2939,6 +2966,24 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+   ssl->config->permute_extensions = !!enabled;
+ }
+ 
++int SSL_CTX_set_extension_permutation(SSL_CTX *ctx, const uint8_t *permutation, size_t permutation_len) {
++  if (!permutation || permutation_len == 0) {
++    return 0;
++  }
++
++  bssl::Array<uint8_t> arr;
++  if (!arr.Init(permutation_len)) {
++    return 0;
++  }
++
++  for (size_t i = 0; i < permutation_len; ++i) {
++    arr[i] = permutation[i] - 1;
++  }
++
++  ctx->extension_permutation = std::move(arr);
++  return !ctx->extension_permutation.empty();
++}
++
+ int32_t SSL_get_ticket_age_skew(const SSL *ssl) {
+   return ssl->s3->ticket_age_skew;
+ }
+@@ -3151,7 +3196,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"

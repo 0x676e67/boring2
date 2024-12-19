@@ -1888,6 +1888,23 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_key_shares_limit(self.as_ptr(), limit as _) }
     }
 
+    #[corresponds(SSL_CTX_set_extension_permutation)]
+    #[cfg(not(feature = "fips-compat"))]
+    pub fn set_extension_permutation(
+        &mut self,
+        extensions: &[ExtensionType],
+    ) -> Result<(), ErrorStack> {
+        let extensions: Vec<u16> = extensions.iter().map(|e| e.0).collect();
+        unsafe {
+            cvt(ffi::SSL_CTX_set_extension_permutation(
+                self.as_ptr(),
+                extensions.as_ptr() as *const _,
+                extensions.len() as _,
+            ))
+            .map(|_| ())
+        }
+    }
+
     /// Configures whether ClientHello extensions should be permuted.
     ///
     /// Note: This is gated to non-fips because the fips feature builds with a separate
