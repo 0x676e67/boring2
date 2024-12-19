@@ -4262,7 +4262,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..57922e72b 100644
+index 5ee280221..d5f3f59cb 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4276,20 +4276,21 @@ index 5ee280221..57922e72b 100644
        return true;
      default:
        return false;
-@@ -2273,7 +2277,12 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2273,7 +2277,13 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
    SSL *const ssl = hs->ssl;
    hs->key_shares[0].reset();
    hs->key_shares[1].reset();
 +  hs->key_shares[2].reset();
    hs->key_share_bytes.Reset();
 +  const uint8_t key_shares_limit = hs->ssl->config->key_shares_limit;
++  const bool is_custom = key_shares_limit != 0;
 +  const uint8_t limit = (key_shares_limit >= 1 && key_shares_limit <= 3) ? key_shares_limit : 2;
 +  const bool enable_second_key_share = (limit >= 2);
 +  const bool enable_three_key_shares = (limit >= 3);
  
    if (hs->max_version < TLS1_3_VERSION) {
      return true;
-@@ -2295,6 +2304,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2295,6 +2305,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
    uint16_t group_id = override_group_id;
    uint16_t second_group_id = 0;
@@ -4298,7 +4299,7 @@ index 5ee280221..57922e72b 100644
    if (override_group_id == 0) {
      // Predict the most preferred group.
      Span<const uint16_t> groups = tls1_get_grouplist(hs);
-@@ -2305,16 +2316,18 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2305,16 +2317,18 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
      group_id = groups[0];
  
@@ -4308,11 +4309,11 @@ index 5ee280221..57922e72b 100644
 -      if (is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +    // Include one post-quantum and one classical initial key share.
 +    for (size_t i = 1; i < groups.size(); i++) {
-+      if (enable_second_key_share && second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
++      if (enable_second_key_share && second_group_id == 0 && (is_custom || (is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])))) {
          second_group_id = groups[i];
          assert(second_group_id != group_id);
 +      } else if (enable_three_key_shares && third_group_id == 0 && 
-+                 is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
++                 (is_custom || is_post_quantum_group(group_id) != is_post_quantum_group(groups[i]))) {
 +        third_group_id = groups[i];
        }
      }
@@ -4322,7 +4323,7 @@ index 5ee280221..57922e72b 100644
    CBB key_exchange;
    hs->key_shares[0] = SSLKeyShare::Create(group_id);
    if (!hs->key_shares[0] ||  //
-@@ -2334,6 +2347,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2334,6 +2348,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
      }
    }
  
@@ -4339,7 +4340,7 @@ index 5ee280221..57922e72b 100644
    return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
  }
  
-@@ -2808,9 +2831,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2832,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4370,7 +4371,7 @@ index 5ee280221..57922e72b 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3138,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3139,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4410,7 +4411,7 @@ index 5ee280221..57922e72b 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3344,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3345,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
@@ -4501,7 +4502,7 @@ index 971ebd0b1..e70e6c868 100644
    if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
      bool any_enabled = false;
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..c123b9641 100644
+index 1e6da2153..a46e94b91 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
@@ -4548,7 +4549,7 @@ index 1e6da2153..c123b9641 100644
 +  uint16_t record_size_limit = 0;
 +
 +  // key_shares_limit is the maximum number of key shares to send.
-+  uint8_t key_shares_limit = 2;
++  uint8_t key_shares_limit = 0;
  };
  
  // From RFC 8446, used in determining PSK modes.
@@ -4571,7 +4572,7 @@ index 1e6da2153..c123b9641 100644
 +  uint16_t record_size_limit = 0;
 +
 +  // key_shares limit is the maximum number of key shares to send.
-+  uint8_t key_shares_limit = 2;
++  uint8_t key_shares_limit = 0;
 +
   private:
    ~ssl_ctx_st();
@@ -5430,7 +5431,7 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..3990ce062 100644
+index 838761af5..a467a6d01 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -5439,7 +5440,7 @@ index 838761af5..3990ce062 100644
        aes_hw_override(false),
 -      aes_hw_override_value(false) {
 +      aes_hw_override_value(false),
-+      key_shares_limit(2) {
++      key_shares_limit(0) {
    CRYPTO_MUTEX_init(&lock);
    CRYPTO_new_ex_data(&ex_data);
  }
@@ -5472,7 +5473,7 @@ index 838761af5..3990ce062 100644
        quic_use_legacy_codepoint(false),
 -      permute_extensions(false) {
 +      permute_extensions(false),
-+      key_shares_limit(2) {
++      key_shares_limit(0) {
    assert(ssl);
  }
  
