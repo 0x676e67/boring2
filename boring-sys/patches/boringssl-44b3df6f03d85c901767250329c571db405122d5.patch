@@ -4176,7 +4176,7 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..3791dfe5d 100644
+index 53aa9b453..5470b863e 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -2378,6 +2378,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
@@ -4205,13 +4205,13 @@ index 53aa9b453..3791dfe5d 100644
 +// send record size limit extension.
 +OPENSSL_EXPORT void SSL_CTX_set_record_size_limit(SSL_CTX *ctx, uint16_t limit);
 +
-+// SSL_set_enable_three_key_shares configures whether sockets on |ssl| should
++// SSL_set_key_shares_limit configures whether sockets on |ssl| should
 +// send three key shares.
-+OPENSSL_EXPORT void SSL_set_enable_three_key_shares(SSL *ssl);
++OPENSSL_EXPORT void SSL_set_key_shares_limit(SSL *ssl, uint8_t limit);
 +
-+// SSL_CTX_set_enable_three_key_shares configures whether sockets on |ctx| should
++// SSL_CTX_set_key_shares_limit configures whether sockets on |ctx| should
 +// send three key shares.
-+OPENSSL_EXPORT void SSL_CTX_set_enable_three_key_shares(SSL_CTX *ctx);
++OPENSSL_EXPORT void SSL_CTX_set_key_shares_limit(SSL_CTX *ctx, uint8_t limit);
 +
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
@@ -4262,7 +4262,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..9a55a6b54 100644
+index 5ee280221..a23e5b255 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4276,17 +4276,18 @@ index 5ee280221..9a55a6b54 100644
        return true;
      default:
        return false;
-@@ -2273,7 +2277,9 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2273,7 +2277,10 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
    SSL *const ssl = hs->ssl;
    hs->key_shares[0].reset();
    hs->key_shares[1].reset();
 +  hs->key_shares[2].reset();
    hs->key_share_bytes.Reset();
-+  const bool enable_three_key_shares = hs->ssl->config->three_key_shares;
++  const uint8_t key_shares_limit = hs->ssl->config->key_shares_limit;
++  const uint8_t limit = (key_shares_limit >= 1 && key_shares_limit <= 3) ? key_shares_limit : 2;
  
    if (hs->max_version < TLS1_3_VERSION) {
      return true;
-@@ -2295,6 +2301,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2295,6 +2302,8 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
    uint16_t group_id = override_group_id;
    uint16_t second_group_id = 0;
@@ -4295,7 +4296,7 @@ index 5ee280221..9a55a6b54 100644
    if (override_group_id == 0) {
      // Predict the most preferred group.
      Span<const uint16_t> groups = tls1_get_grouplist(hs);
-@@ -2305,12 +2313,21 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+@@ -2305,16 +2314,28 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
  
      group_id = groups[0];
  
@@ -4305,28 +4306,44 @@ index 5ee280221..9a55a6b54 100644
 -      if (is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +    // Include one post-quantum and one classical initial key share.
 +    for (size_t i = 1; i < groups.size(); i++) {
-+      if (second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
++      if (limit == 2 && second_group_id == 0 && is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
          second_group_id = groups[i];
--        assert(second_group_id != group_id);
-+      } else if (enable_three_key_shares && third_group_id == 0 && 
+         assert(second_group_id != group_id);
++      } else if (limit == 3 && third_group_id == 0 && 
 +                 is_post_quantum_group(group_id) != is_post_quantum_group(groups[i])) {
 +        third_group_id = groups[i];
 +      }
 +
-+      if (!enable_three_key_shares && second_group_id != 0) {
-+        break; // Stop after finding the second group if three shares are not enabled.
++      // Stop after finding the second group if three shares are not enabled.
++      if (limit == 3 && second_group_id != 0) {
++        break; 
 +      }
 +
-+      if (enable_three_key_shares && second_group_id != 0 && third_group_id != 0) {
-+        break; // Stop after finding all three groups.
++      // Stop after finding all three groups.
++      if (limit == 3 && second_group_id != 0 && third_group_id != 0) {
++        break; 
        }
      }
    }
-@@ -2334,6 +2351,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+-
++    
+   CBB key_exchange;
+   hs->key_shares[0] = SSLKeyShare::Create(group_id);
+   if (!hs->key_shares[0] ||  //
+@@ -2324,7 +2345,7 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
+     return false;
+   }
+ 
+-  if (second_group_id != 0) {
++  if (limit == 2 && second_group_id != 0) {
+     hs->key_shares[1] = SSLKeyShare::Create(second_group_id);
+     if (!hs->key_shares[1] ||  //
+         !CBB_add_u16(cbb.get(), second_group_id) ||
+@@ -2334,6 +2355,16 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
      }
    }
  
-+  if (enable_three_key_shares && third_group_id != 0) {
++  if (limit == 3 && third_group_id != 0) {
 +    hs->key_shares[2] = SSLKeyShare::Create(third_group_id);
 +    if (!hs->key_shares[2] ||  //
 +        !CBB_add_u16(cbb.get(), third_group_id) ||
@@ -4339,7 +4356,7 @@ index 5ee280221..9a55a6b54 100644
    return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
  }
  
-@@ -2808,9 +2835,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2808,9 +2839,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4370,7 +4387,7 @@ index 5ee280221..9a55a6b54 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -3094,6 +3142,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3146,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4410,7 +4427,7 @@ index 5ee280221..9a55a6b54 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3348,13 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3352,13 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
@@ -4501,7 +4518,7 @@ index 971ebd0b1..e70e6c868 100644
    if (hs->min_version < TLS1_3_VERSION && type != ssl_client_hello_inner) {
      bool any_enabled = false;
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..95e94e5ad 100644
+index 1e6da2153..c123b9641 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -554,8 +554,13 @@ BSSL_NAMESPACE_BEGIN
@@ -4547,8 +4564,8 @@ index 1e6da2153..95e94e5ad 100644
 +  // record_size_limit is whether to send record size limit extension.
 +  uint16_t record_size_limit = 0;
 +
-+  // enable_three_key_shares is whether to send three key shares.
-+  bool three_key_shares : 1;
++  // key_shares_limit is the maximum number of key shares to send.
++  uint8_t key_shares_limit = 2;
  };
  
  // From RFC 8446, used in determining PSK modes.
@@ -4570,8 +4587,8 @@ index 1e6da2153..95e94e5ad 100644
 +  // record_size_limit is whether to send record size limit extension.
 +  uint16_t record_size_limit = 0;
 +
-+  // enable_three_key_shares is whether to send three key shares.
-+  bool three_key_shares : 1;
++  // key_shares limit is the maximum number of key shares to send.
++  uint8_t key_shares_limit = 2;
 +
   private:
    ~ssl_ctx_st();
@@ -5430,7 +5447,7 @@ index 09a9ad380..a972e8dd1 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..5eaa8953b 100644
+index 838761af5..3990ce062 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -5439,7 +5456,7 @@ index 838761af5..5eaa8953b 100644
        aes_hw_override(false),
 -      aes_hw_override_value(false) {
 +      aes_hw_override_value(false),
-+      three_key_shares(false) {
++      key_shares_limit(2) {
    CRYPTO_MUTEX_init(&lock);
    CRYPTO_new_ex_data(&ex_data);
  }
@@ -5447,7 +5464,7 @@ index 838761af5..5eaa8953b 100644
    ssl->config->aes_hw_override = ctx->aes_hw_override;
    ssl->config->aes_hw_override_value = ctx->aes_hw_override_value;
    ssl->config->tls13_cipher_policy = ctx->tls13_cipher_policy;
-+  ssl->config->three_key_shares = ctx->three_key_shares;
++  ssl->config->key_shares_limit = ctx->key_shares_limit;
  
    if (!ssl->config->supported_group_list.CopyFrom(ctx->supported_group_list) ||
        !ssl->config->alpn_client_proto_list.CopyFrom(
@@ -5472,7 +5489,7 @@ index 838761af5..5eaa8953b 100644
        quic_use_legacy_codepoint(false),
 -      permute_extensions(false) {
 +      permute_extensions(false),
-+      three_key_shares(false) {
++      key_shares_limit(2) {
    assert(ssl);
  }
  
@@ -5491,15 +5508,15 @@ index 838761af5..5eaa8953b 100644
 +  ctx->record_size_limit = limit;
 +}
 +
-+void SSL_set_enable_three_key_shares(SSL *ssl) {
++void SSL_set_key_shares_limit(SSL *ssl, uint8_t limit) {
 +  if (!ssl->config) {
 +    return;
 +  }
-+  ssl->config->three_key_shares = true;
++  ssl->config->key_shares_limit = limit;
 +}
 +
-+void SSL_CTX_set_enable_three_key_shares(SSL_CTX *ctx) {
-+  ctx->three_key_shares = true;
++void SSL_CTX_set_key_shares_limit(SSL_CTX *ctx, uint8_t limit) {
++  ctx->key_shares_limit = limit;
 +}
 +
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,

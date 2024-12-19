@@ -567,6 +567,7 @@ impl ExtensionType {
     pub const CERTIFICATE_TIMESTAMP: Self = Self(ffi::TLSEXT_TYPE_certificate_timestamp as u16);
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
     pub const CHANNEL_ID: Self = Self(ffi::TLSEXT_TYPE_channel_id as u16);
+    pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
 }
 
 impl From<u16> for ExtensionType {
@@ -1882,9 +1883,9 @@ impl SslContextBuilder {
     }
 
     /// Sets whether the context should enable there key share extension.
-    #[corresponds(SSL_CTX_set_enable_three_key_shares)]
-    pub fn set_enable_three_key_shares(&mut self) {
-        unsafe { ffi::SSL_CTX_set_enable_three_key_shares(self.as_ptr()) }
+    #[corresponds(SSL_CTX_set_key_shares_limit)]
+    pub fn set_key_shares_length_limit(&mut self, limit: u8) {
+        unsafe { ffi::SSL_CTX_set_key_shares_limit(self.as_ptr(), limit as _) }
     }
 
     /// Configures whether ClientHello extensions should be permuted.
