@@ -568,6 +568,49 @@ impl ExtensionType {
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
     pub const CHANNEL_ID: Self = Self(ffi::TLSEXT_TYPE_channel_id as u16);
     pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
+
+    /// The permutation of extension types used by BoringSSL.
+    pub const BORING_SSLEXTENSION_PERMUTATION: [ExtensionType; 25] = [
+        ExtensionType::SERVER_NAME,
+        ExtensionType::ENCRYPTED_CLIENT_HELLO,
+        ExtensionType::EXTENDED_MASTER_SECRET,
+        ExtensionType::RENEGOTIATE,
+        ExtensionType::SUPPORTED_GROUPS,
+        ExtensionType::EC_POINT_FORMATS,
+        ExtensionType::SESSION_TICKET,
+        ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
+        ExtensionType::STATUS_REQUEST,
+        ExtensionType::SIGNATURE_ALGORITHMS,
+        ExtensionType::NEXT_PROTO_NEG,
+        ExtensionType::CERTIFICATE_TIMESTAMP,
+        ExtensionType::CHANNEL_ID,
+        ExtensionType::SRTP,
+        ExtensionType::KEY_SHARE,
+        ExtensionType::PSK_KEY_EXCHANGE_MODES,
+        ExtensionType::EARLY_DATA,
+        ExtensionType::SUPPORTED_VERSIONS,
+        ExtensionType::COOKIE,
+        ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
+        ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
+        ExtensionType::CERT_COMPRESSION,
+        ExtensionType::DELEGATED_CREDENTIAL,
+        ExtensionType::APPLICATION_SETTINGS,
+        ExtensionType::RECORD_SIZE_LIMIT,
+    ];
+
+    fn has_duplicates(indices: &[u8]) -> bool {
+        if indices.len() > ExtensionType::BORING_SSLEXTENSION_PERMUTATION.len() {
+            return true;
+        }
+        for i in 0..indices.len() {
+            for j in i + 1..indices.len() {
+                if indices[i] == indices[j] {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 impl From<u16> for ExtensionType {
@@ -575,35 +618,6 @@ impl From<u16> for ExtensionType {
         Self(value)
     }
 }
-
-/// The permutation of extension types used by BoringSSL.
-pub const BORING_SSLEXTENSION_PERMUTATION: [ExtensionType; 25] = [
-    ExtensionType::SERVER_NAME,
-    ExtensionType::ENCRYPTED_CLIENT_HELLO,
-    ExtensionType::EXTENDED_MASTER_SECRET,
-    ExtensionType::RENEGOTIATE,
-    ExtensionType::SUPPORTED_GROUPS,
-    ExtensionType::EC_POINT_FORMATS,
-    ExtensionType::SESSION_TICKET,
-    ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
-    ExtensionType::STATUS_REQUEST,
-    ExtensionType::SIGNATURE_ALGORITHMS,
-    ExtensionType::NEXT_PROTO_NEG,
-    ExtensionType::CERTIFICATE_TIMESTAMP,
-    ExtensionType::CHANNEL_ID,
-    ExtensionType::SRTP,
-    ExtensionType::KEY_SHARE,
-    ExtensionType::PSK_KEY_EXCHANGE_MODES,
-    ExtensionType::EARLY_DATA,
-    ExtensionType::SUPPORTED_VERSIONS,
-    ExtensionType::COOKIE,
-    ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
-    ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
-    ExtensionType::CERT_COMPRESSION,
-    ExtensionType::DELEGATED_CREDENTIAL,
-    ExtensionType::APPLICATION_SETTINGS,
-    ExtensionType::RECORD_SIZE_LIMIT,
-];
 
 /// An SSL/TLS protocol version.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -1917,6 +1931,9 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_key_shares_limit(self.as_ptr(), limit as _) }
     }
 
+    /// Sets the indices of the extensions to be permuted.
+    ///
+    /// The indices must be in the range [0, 25).
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation(
@@ -1925,12 +1942,16 @@ impl SslContextBuilder {
     ) -> Result<(), ErrorStack> {
         let mut indices = Vec::with_capacity(shuffled.len());
         for &ext in shuffled {
-            if let Some(index) = BORING_SSLEXTENSION_PERMUTATION
+            if let Some(index) = ExtensionType::BORING_SSLEXTENSION_PERMUTATION
                 .iter()
                 .position(|&e| e == ext)
             {
                 indices.push(index as u8);
             }
+        }
+        
+        if ExtensionType::has_duplicates(&indices) {
+            return Ok(());
         }
 
         unsafe {
@@ -1948,11 +1969,8 @@ impl SslContextBuilder {
     /// The indices must be in the range [0, 25).
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
-    pub fn set_extension_permutation_indices(
-        &mut self,
-        indices: &[u8],
-    ) -> Result<(), ErrorStack> {
-        if indices.len() > BORING_SSLEXTENSION_PERMUTATION.len() {
+    pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
+        if ExtensionType::has_duplicates(&indices) {
             return Ok(());
         }
 
