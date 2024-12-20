@@ -1920,6 +1920,8 @@ impl SslContextBuilder {
     /// Sets the indices of the extensions to be permuted.
     ///
     /// The indices must be in the range [0, 25).
+    /// Extension duplication will be verified by the user. 
+    /// If duplication occurs, TLS connection failure may occur.
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation(
@@ -1953,6 +1955,8 @@ impl SslContextBuilder {
     /// Sets the indices of the extensions to be permuted.
     ///
     /// The indices must be in the range [0, 25).
+    /// Extension duplication will be verified by the user. 
+    /// If duplication occurs, TLS connection failure may occur.
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
