@@ -4874,7 +4874,7 @@ index ebb075351..17fcaa13c 100644
                  "Not all ciphers are included in the cipher order");
  
 diff --git a/src/ssl/ssl_key_share.cc b/src/ssl/ssl_key_share.cc
-index 09a9ad380..a972e8dd1 100644
+index 09a9ad380..9c583b5ec 100644
 --- a/src/ssl/ssl_key_share.cc
 +++ b/src/ssl/ssl_key_share.cc
 @@ -26,6 +26,7 @@
@@ -5463,7 +5463,7 @@ index 09a9ad380..a972e8dd1 100644
 +    {NID_X25519MLKEM768, SSL_CURVE_X25519_MLKEM768,
 +        "X25519MLKEM768", "X25519MLKEM768"},
 +    
-+    //unspport group but add them
++    // This is fake group id
 +    {NID_ffdhe2048, SSL_CURVE_DHE2048, "dhe2048", "ffdhe2048"},
 +    {NID_ffdhe3072, SSL_CURVE_DHE3072, "dhe3072", "ffdhe3072"},
  };

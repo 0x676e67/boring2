@@ -576,6 +576,35 @@ impl From<u16> for ExtensionType {
     }
 }
 
+/// The permutation of extension types used by BoringSSL.
+pub const BORING_SSLEXTENSION_PERMUTATION: [ExtensionType; 25] = [
+    ExtensionType::SERVER_NAME,
+    ExtensionType::ENCRYPTED_CLIENT_HELLO,
+    ExtensionType::EXTENDED_MASTER_SECRET,
+    ExtensionType::RENEGOTIATE,
+    ExtensionType::SUPPORTED_GROUPS,
+    ExtensionType::EC_POINT_FORMATS,
+    ExtensionType::SESSION_TICKET,
+    ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
+    ExtensionType::STATUS_REQUEST,
+    ExtensionType::SIGNATURE_ALGORITHMS,
+    ExtensionType::NEXT_PROTO_NEG,
+    ExtensionType::CERTIFICATE_TIMESTAMP,
+    ExtensionType::CHANNEL_ID,
+    ExtensionType::SRTP,
+    ExtensionType::KEY_SHARE,
+    ExtensionType::PSK_KEY_EXCHANGE_MODES,
+    ExtensionType::EARLY_DATA,
+    ExtensionType::SUPPORTED_VERSIONS,
+    ExtensionType::COOKIE,
+    ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
+    ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
+    ExtensionType::CERT_COMPRESSION,
+    ExtensionType::DELEGATED_CREDENTIAL,
+    ExtensionType::APPLICATION_SETTINGS,
+    ExtensionType::RECORD_SIZE_LIMIT,
+];
+
 /// An SSL/TLS protocol version.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct SslVersion(u16);
@@ -1894,34 +1923,6 @@ impl SslContextBuilder {
         &mut self,
         shuffled: &[ExtensionType],
     ) -> Result<(), ErrorStack> {
-        const BORING_SSLEXTENSION_PERMUTATION: [ExtensionType; 25] = [
-            ExtensionType::SERVER_NAME,
-            ExtensionType::ENCRYPTED_CLIENT_HELLO,
-            ExtensionType::EXTENDED_MASTER_SECRET,
-            ExtensionType::RENEGOTIATE,
-            ExtensionType::SUPPORTED_GROUPS,
-            ExtensionType::EC_POINT_FORMATS,
-            ExtensionType::SESSION_TICKET,
-            ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
-            ExtensionType::STATUS_REQUEST,
-            ExtensionType::SIGNATURE_ALGORITHMS,
-            ExtensionType::NEXT_PROTO_NEG,
-            ExtensionType::CERTIFICATE_TIMESTAMP,
-            ExtensionType::CHANNEL_ID,
-            ExtensionType::SRTP,
-            ExtensionType::KEY_SHARE,
-            ExtensionType::PSK_KEY_EXCHANGE_MODES,
-            ExtensionType::EARLY_DATA,
-            ExtensionType::SUPPORTED_VERSIONS,
-            ExtensionType::COOKIE,
-            ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
-            ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
-            ExtensionType::CERT_COMPRESSION,
-            ExtensionType::DELEGATED_CREDENTIAL,
-            ExtensionType::APPLICATION_SETTINGS,
-            ExtensionType::RECORD_SIZE_LIMIT,
-        ];
-
         let mut indices = Vec::with_capacity(shuffled.len());
         for &ext in shuffled {
             if let Some(index) = BORING_SSLEXTENSION_PERMUTATION
@@ -1931,7 +1932,30 @@ impl SslContextBuilder {
                 indices.push(index as u8);
             }
         }
-        
+
+        unsafe {
+            cvt(ffi::SSL_CTX_set_extension_permutation(
+                self.as_ptr(),
+                indices.as_ptr() as *const _,
+                indices.len() as _,
+            ))
+            .map(|_| ())
+        }
+    }
+
+    /// Sets the indices of the extensions to be permuted.
+    ///
+    /// The indices must be in the range [0, 25).
+    #[corresponds(SSL_CTX_set_extension_permutation)]
+    #[cfg(not(feature = "fips-compat"))]
+    pub fn set_extension_permutation_indices(
+        &mut self,
+        indices: &[u8],
+    ) -> Result<(), ErrorStack> {
+        if indices.len() > BORING_SSLEXTENSION_PERMUTATION.len() {
+            return Ok(());
+        }
+
         unsafe {
             cvt(ffi::SSL_CTX_set_extension_permutation(
                 self.as_ptr(),
