@@ -597,6 +597,38 @@ impl ExtensionType {
         ExtensionType::APPLICATION_SETTINGS,
         ExtensionType::RECORD_SIZE_LIMIT,
     ];
+
+    /// Returns the index of the given extension type in the permutation.
+    pub const fn index_of(value: ExtensionType) -> Option<usize> {
+        match value {
+            ExtensionType::SERVER_NAME => Some(0),
+            ExtensionType::ENCRYPTED_CLIENT_HELLO => Some(1),
+            ExtensionType::EXTENDED_MASTER_SECRET => Some(2),
+            ExtensionType::RENEGOTIATE => Some(3),
+            ExtensionType::SUPPORTED_GROUPS => Some(4),
+            ExtensionType::EC_POINT_FORMATS => Some(5),
+            ExtensionType::SESSION_TICKET => Some(6),
+            ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION => Some(7),
+            ExtensionType::STATUS_REQUEST => Some(8),
+            ExtensionType::SIGNATURE_ALGORITHMS => Some(9),
+            ExtensionType::NEXT_PROTO_NEG => Some(10),
+            ExtensionType::CERTIFICATE_TIMESTAMP => Some(11),
+            ExtensionType::CHANNEL_ID => Some(12),
+            ExtensionType::SRTP => Some(13),
+            ExtensionType::KEY_SHARE => Some(14),
+            ExtensionType::PSK_KEY_EXCHANGE_MODES => Some(15),
+            ExtensionType::EARLY_DATA => Some(16),
+            ExtensionType::SUPPORTED_VERSIONS => Some(17),
+            ExtensionType::COOKIE => Some(18),
+            ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD => Some(19),
+            ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY => Some(20),
+            ExtensionType::CERT_COMPRESSION => Some(21),
+            ExtensionType::DELEGATED_CREDENTIAL => Some(22),
+            ExtensionType::APPLICATION_SETTINGS => Some(23),
+            ExtensionType::RECORD_SIZE_LIMIT => Some(24),
+            _ => None,
+        }
+    }
 }
 
 impl From<u16> for ExtensionType {
@@ -1928,16 +1960,9 @@ impl SslContextBuilder {
         &mut self,
         shuffled: &[ExtensionType],
     ) -> Result<(), ErrorStack> {
-        if shuffled.len() > ExtensionType::BORING_SSLEXTENSION_PERMUTATION.len() {
-            return Ok(());
-        }
-
-        let mut indices = Vec::with_capacity(shuffled.len());
+        let mut indices = Vec::with_capacity(shuffled.len().div_ceil(2));
         for &ext in shuffled {
-            if let Some(index) = ExtensionType::BORING_SSLEXTENSION_PERMUTATION
-                .iter()
-                .position(|&e| e == ext)
-            {
+            if let Some(index) = ExtensionType::index_of(ext) {
                 indices.push(index as u8);
             }
         }
@@ -1960,10 +1985,6 @@ impl SslContextBuilder {
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
-        if indices.len() > ExtensionType::BORING_SSLEXTENSION_PERMUTATION.len() {
-            return Ok(());
-        }
-
         unsafe {
             cvt(ffi::SSL_CTX_set_extension_permutation(
                 self.as_ptr(),
