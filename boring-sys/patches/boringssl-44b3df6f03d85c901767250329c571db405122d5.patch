@@ -4176,10 +4176,20 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..f86ae1b47 100644
+index 53aa9b453..2a571c0e6 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
-@@ -2378,6 +2378,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
+@@ -718,6 +718,9 @@ OPENSSL_EXPORT int SSL_version(const SSL *ssl);
+ #define SSL_OP_NO_DTLSv1 SSL_OP_NO_TLSv1
+ #define SSL_OP_NO_DTLSv1_2 SSL_OP_NO_TLSv1_2
+ 
++// SSL_OP_NO_PSK_DHE_KE disables PSK-DHE-KE.
++#define SSL_OP_NO_PSK_DHE_KE 0x40000000L
++
+ // SSL_CTX_set_options enables all options set in |options| (which should be one
+ // or more of the |SSL_OP_*| values, ORed together) in |ctx|. It returns a
+ // bitmask representing the resulting enabled options.
+@@ -2378,6 +2381,13 @@ OPENSSL_EXPORT int SSL_set1_curves_list(SSL *ssl, const char *curves);
  #define SSL_CURVE_SECP521R1 25
  #define SSL_CURVE_X25519 29
  #define SSL_CURVE_X25519_KYBER768_DRAFT00 0x6399
@@ -4193,7 +4203,7 @@ index 53aa9b453..f86ae1b47 100644
  
  // SSL_get_curve_id returns the ID of the curve used by |ssl|'s most recently
  // completed handshake or 0 if not applicable.
-@@ -4570,6 +4577,27 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4570,6 +4580,27 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
@@ -4221,7 +4231,7 @@ index 53aa9b453..f86ae1b47 100644
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -4874,6 +4902,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -4874,6 +4905,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -4267,7 +4277,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..dd1284d18 100644
+index 5ee280221..a291e38d4 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4281,6 +4291,15 @@ index 5ee280221..dd1284d18 100644
        return true;
      default:
        return false;
+@@ -2125,7 +2129,7 @@ bool ssl_ext_pre_shared_key_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
+ static bool ext_psk_key_exchange_modes_add_clienthello(
+     const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
+     ssl_client_hello_type_t type) {
+-  if (hs->max_version < TLS1_3_VERSION) {
++  if (hs->max_version < TLS1_3_VERSION || (SSL_get_options(hs->ssl) & SSL_OP_NO_PSK_DHE_KE)) {
+     return true;
+   }
+ 
 @@ -2273,7 +2277,15 @@ bool ssl_setup_key_shares(SSL_HANDSHAKE *hs, uint16_t override_group_id) {
    SSL *const ssl = hs->ssl;
    hs->key_shares[0].reset();

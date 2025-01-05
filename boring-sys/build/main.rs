@@ -487,11 +487,6 @@ fn ensure_patches_applied(config: &Config) -> io::Result<()> {
         "boringssl-44b3df6f03d85c901767250329c571db405122d5.patch",
     )?;
 
-    // if config.features.pq_experimental {
-    //     println!("cargo:warning=applying experimental post quantum crypto patch to boringssl");
-    //     apply_patch(config, "boring-pq.patch")?;
-    // }
-
     if config.features.rpk {
         println!("cargo:warning=applying RPK patch to boringssl");
         apply_patch(config, "rpk.patch")?;

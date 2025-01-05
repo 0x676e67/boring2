@@ -186,6 +186,9 @@ bitflags! {
 
         /// Disallow all renegotiation in TLSv1.2 and earlier.
         const NO_RENEGOTIATION = ffi::SSL_OP_NO_RENEGOTIATION as _;
+
+        /// Disables PSK with DHE.
+        const NO_PSK_DHE_KE = ffi::SSL_OP_NO_PSK_DHE_KE as _;
     }
 }
 
