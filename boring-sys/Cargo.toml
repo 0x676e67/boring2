@@ -51,7 +51,7 @@ include = [
 ]
 
 [package.metadata.docs.rs]
-features = ["rpk", "pq-experimental", "underscore-wildcards"]
+features = ["pq-experimental", "underscore-wildcards"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
