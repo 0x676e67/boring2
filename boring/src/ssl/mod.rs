@@ -1948,8 +1948,15 @@ impl SslContextBuilder {
 
     /// Sets whether the context should enable there key share extension.
     #[corresponds(SSL_CTX_set_key_shares_limit)]
-    pub fn set_key_shares_length_limit(&mut self, limit: u8) {
+    pub fn set_key_shares_limit(&mut self, limit: u8) {
         unsafe { ffi::SSL_CTX_set_key_shares_limit(self.as_ptr(), limit as _) }
+    }
+
+    /// Sets whether the context should enable there key share extension.
+    #[deprecated(since = "4.13.8", note = "use `set_key_shares_limit` instead")]
+    #[corresponds(SSL_CTX_set_key_shares_limit)]
+    pub fn set_key_shares_length_limit(&mut self, limit: u8) {
+        self.set_key_shares_limit(limit)
     }
 
     /// Sets the indices of the extensions to be permuted.
