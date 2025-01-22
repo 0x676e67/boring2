@@ -4940,7 +4940,7 @@ index 1e6da2153..f3150a114 100644
    ~ssl_ctx_st();
    friend OPENSSL_EXPORT void SSL_CTX_free(SSL_CTX *);
 diff --git a/src/ssl/ssl_cipher.cc b/src/ssl/ssl_cipher.cc
-index ebb075351..05d4e8ff8 100644
+index ebb075351..44febcb50 100644
 --- a/src/ssl/ssl_cipher.cc
 +++ b/src/ssl/ssl_cipher.cc
 @@ -175,26 +175,106 @@ static constexpr SSL_CIPHER kCiphers[] = {
@@ -5103,14 +5103,14 @@ index ebb075351..05d4e8ff8 100644
 + 
 +    // Cipher C008
 +    {
-+     "ECDHE-ECDSA-DES-CBC3-SHA",
-+     "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
-+     0x0300C008,
-+     SSL_kECDHE,
-+     SSL_aECDSA,
-+     SSL_3DES,
-+     SSL_SHA1,
-+     SSL_HANDSHAKE_MAC_DEFAULT,
++        TLS1_TXT_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA,
++        "TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA",
++        TLS1_CK_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA,
++        SSL_kECDHE,
++        SSL_aECDSA,
++        SSL_3DES,
++        SSL_SHA1,
++        SSL_HANDSHAKE_MAC_DEFAULT,
 +    },
 +
      // Cipher C009
@@ -5125,14 +5125,14 @@ index ebb075351..05d4e8ff8 100644
 +    // where it is called ECDHE-RSA-DES-CBC3-SHA
 +    // It's not supposed to really work but just appear in the TLS client hello.
 +    {
-+     "ECDHE-RSA-DES-CBC3-SHA",
-+     "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
-+     0x0300C012,
-+     SSL_kECDHE,
-+     SSL_aRSA,
-+     SSL_3DES,
-+     SSL_SHA1,
-+     SSL_HANDSHAKE_MAC_DEFAULT,
++        TLS1_TXT_ECDHE_RSA_WITH_DES_192_CBC3_SHA,
++        "TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA",
++        TLS1_CK_ECDHE_RSA_WITH_DES_192_CBC3_SHA,
++        SSL_kECDHE,
++        SSL_aRSA,
++        SSL_3DES,
++        SSL_SHA1,
++        SSL_HANDSHAKE_MAC_DEFAULT,
 +    },
 +
      // Cipher C013
@@ -5254,27 +5254,31 @@ index ebb075351..05d4e8ff8 100644
    } else {
      return false;
    }
-@@ -1152,6 +1346,8 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+@@ -1152,13 +1346,20 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
        TLS1_CK_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 & 0xffff,
    };
    static const uint16_t kLegacyCiphers[] = {
++      TLS1_CK_RSA_WITH_AES_128_SHA256 & 0xffff,
++      TLS1_CK_RSA_WITH_AES_256_SHA256 & 0xffff,
 +      TLS1_CK_ECDHE_ECDSA_WITH_DES_192_CBC3_SHA & 0xffff,
 +      TLS1_CK_ECDHE_RSA_WITH_DES_192_CBC3_SHA & 0xffff,
        TLS1_CK_ECDHE_ECDSA_WITH_AES_128_CBC_SHA & 0xffff,
        TLS1_CK_ECDHE_RSA_WITH_AES_128_CBC_SHA & 0xffff,
        TLS1_CK_ECDHE_PSK_WITH_AES_128_CBC_SHA & 0xffff,
-@@ -1166,12 +1362,36 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+       TLS1_CK_ECDHE_ECDSA_WITH_AES_256_CBC_SHA & 0xffff,
+       TLS1_CK_ECDHE_RSA_WITH_AES_256_CBC_SHA & 0xffff,
+       TLS1_CK_ECDHE_PSK_WITH_AES_256_CBC_SHA & 0xffff,
++      TLS1_CK_ECDHE_ECDSA_WITH_AES_128_SHA256 & 0xffff,
++      TLS1_CK_ECDHE_ECDSA_WITH_AES_256_SHA384 & 0xffff,
+       TLS1_CK_ECDHE_RSA_WITH_AES_128_CBC_SHA256 & 0xffff,
++      TLS1_CK_ECDHE_RSA_WITH_AES_256_SHA384 & 0xffff,
+       TLS1_CK_RSA_WITH_AES_128_GCM_SHA256 & 0xffff,
+       TLS1_CK_RSA_WITH_AES_256_GCM_SHA384 & 0xffff,
+       TLS1_CK_RSA_WITH_AES_128_SHA & 0xffff,
+@@ -1166,12 +1367,28 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
        TLS1_CK_RSA_WITH_AES_256_SHA & 0xffff,
        TLS1_CK_PSK_WITH_AES_256_CBC_SHA & 0xffff,
        SSL3_CK_RSA_DES_192_CBC3_SHA & 0xffff,
-+      //  add legacy cipehrs.
-+      TLS1_CK_RSA_WITH_AES_128_SHA256 & 0xffff,
-+      TLS1_CK_RSA_WITH_AES_256_SHA256 & 0xffff,
-+      0x0300C008 & 0xffff,
-+      0x0300C012 & 0xffff,
-+      TLS1_CK_ECDHE_ECDSA_WITH_AES_128_SHA256 & 0xffff,
-+      TLS1_CK_ECDHE_ECDSA_WITH_AES_256_SHA384 & 0xffff,
-+      TLS1_CK_ECDHE_RSA_WITH_AES_256_SHA384 & 0xffff,
 +      TLS1_CK_DHE_RSA_WITH_AES_128_SHA & 0xffff,
 +      TLS1_CK_DHE_RSA_WITH_AES_256_SHA & 0xffff,
 +      TLS1_CK_DHE_RSA_WITH_AES_128_SHA256 & 0xffff,
@@ -5303,7 +5307,7 @@ index ebb075351..05d4e8ff8 100644
    for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(co_list); i++) {
      co_list[i].next =
          i + 1 < OPENSSL_ARRAY_SIZE(co_list) ? &co_list[i + 1] : nullptr;
-@@ -1207,8 +1427,17 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+@@ -1207,8 +1424,17 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
      co_list[num++].cipher = SSL_get_cipher_by_value(id);
      assert(co_list[num - 1].cipher != nullptr);
    }
@@ -5322,7 +5326,7 @@ index ebb075351..05d4e8ff8 100644
                      OPENSSL_ARRAY_SIZE(kCiphers),
                  "Not all ciphers are included in the cipher order");
  
-@@ -1403,6 +1632,8 @@ int SSL_CIPHER_get_digest_nid(const SSL_CIPHER *cipher) {
+@@ -1403,6 +1629,8 @@ int SSL_CIPHER_get_digest_nid(const SSL_CIPHER *cipher) {
        return NID_sha1;
      case SSL_SHA256:
        return NID_sha256;
@@ -5331,7 +5335,7 @@ index ebb075351..05d4e8ff8 100644
    }
    assert(0);
    return NID_undef;
-@@ -1655,6 +1886,10 @@ const char *SSL_CIPHER_description(const SSL_CIPHER *cipher, char *buf,
+@@ -1655,6 +1883,10 @@ const char *SSL_CIPHER_description(const SSL_CIPHER *cipher, char *buf,
        mac = "SHA256";
        break;
  
