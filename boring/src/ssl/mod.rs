@@ -568,6 +568,8 @@ impl ExtensionType {
     pub const RENEGOTIATE: Self = Self(ffi::TLSEXT_TYPE_renegotiate as u16);
     pub const DELEGATED_CREDENTIAL: Self = Self(ffi::TLSEXT_TYPE_delegated_credential as u16);
     pub const APPLICATION_SETTINGS: Self = Self(ffi::TLSEXT_TYPE_application_settings as u16);
+    pub const APPLICATION_SETTINGS_NEW: Self =
+        Self(ffi::TLSEXT_TYPE_application_settings_new as u16);
     pub const ENCRYPTED_CLIENT_HELLO: Self = Self(ffi::TLSEXT_TYPE_encrypted_client_hello as u16);
     pub const CERTIFICATE_TIMESTAMP: Self = Self(ffi::TLSEXT_TYPE_certificate_timestamp as u16);
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
@@ -575,7 +577,7 @@ impl ExtensionType {
     pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
 
     /// The permutation of extension types used by BoringSSL.
-    pub const BORING_SSLEXTENSION_PERMUTATION: [ExtensionType; 25] = [
+    pub const BORING_SSLEXTENSION_PERMUTATION: &[ExtensionType] = &[
         ExtensionType::SERVER_NAME,
         ExtensionType::ENCRYPTED_CLIENT_HELLO,
         ExtensionType::EXTENDED_MASTER_SECRET,
@@ -600,6 +602,7 @@ impl ExtensionType {
         ExtensionType::CERT_COMPRESSION,
         ExtensionType::DELEGATED_CREDENTIAL,
         ExtensionType::APPLICATION_SETTINGS,
+        ExtensionType::APPLICATION_SETTINGS_NEW,
         ExtensionType::RECORD_SIZE_LIMIT,
     ];
 
@@ -630,7 +633,8 @@ impl ExtensionType {
             ExtensionType::CERT_COMPRESSION => Some(21),
             ExtensionType::DELEGATED_CREDENTIAL => Some(22),
             ExtensionType::APPLICATION_SETTINGS => Some(23),
-            ExtensionType::RECORD_SIZE_LIMIT => Some(24),
+            ExtensionType::APPLICATION_SETTINGS_NEW => Some(24),
+            ExtensionType::RECORD_SIZE_LIMIT => Some(25),
             _ => None,
         }
     }
