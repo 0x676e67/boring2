@@ -101,6 +101,8 @@ pub use self::async_callbacks::{
     BoxCustomVerifyFuture, BoxGetSessionFinish, BoxGetSessionFuture, BoxPrivateKeyMethodFinish,
     BoxPrivateKeyMethodFuture, BoxSelectCertFinish, BoxSelectCertFuture, ExDataFuture,
 };
+#[cfg(feature = "cert-compression")]
+pub use self::cert_compression::CertCompressionAlgorithm;
 pub use self::connector::{
     ConnectConfiguration, SslAcceptor, SslAcceptorBuilder, SslConnector, SslConnectorBuilder,
 };
@@ -109,6 +111,8 @@ pub use self::error::{Error, ErrorCode, HandshakeError};
 mod async_callbacks;
 mod bio;
 mod callbacks;
+#[cfg(feature = "cert-compression")]
+mod cert_compression;
 mod connector;
 mod error;
 mod mut_only;
@@ -1351,6 +1355,24 @@ impl SslContextBuilder {
         T: HasPrivate,
     {
         unsafe { cvt(ffi::SSL_CTX_use_PrivateKey(self.as_ptr(), key.as_ptr())).map(|_| ()) }
+    }
+
+    /// Sets whether a certificate compression algorithm should be used.
+    #[cfg(feature = "cert-compression")]
+    #[corresponds(SSL_CTX_add_cert_compression_alg)]
+    pub fn add_cert_compression_alg(
+        &mut self,
+        alg: CertCompressionAlgorithm,
+    ) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_add_cert_compression_alg(
+                self.as_ptr(),
+                alg as _,
+                alg.compression_fn(),
+                alg.decompression_fn(),
+            ))
+            .map(|_| ())
+        }
     }
 
     /// Sets the list of supported ciphers for protocols before TLSv1.3.

@@ -64,12 +64,18 @@ kx-client-pq-preferred = ["kx-safe-default", "kx-client-pq-supported"]
 # Implies "kx-safe-default".
 kx-client-nist-required = ["kx-safe-default"]
 
+# Certificate compression
+cert-compression = ["flate2", "brotli", "zstd"]
+
 [dependencies]
 bitflags = { workspace = true }
 foreign-types = { workspace = true }
 openssl-macros = { workspace = true }
 libc = { workspace = true }
 boring-sys = { workspace = true }
+brotli = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
 hex = { workspace = true }
