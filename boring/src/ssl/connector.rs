@@ -334,12 +334,6 @@ impl ConnectConfiguration {
     }
 }
 
-#[test]
-fn test_options() {
-    use crate::ssl::SslOptions;
-    print!("{:?}", SslOptions::NO_TICKET.bits());
-}
-
 impl Deref for ConnectConfiguration {
     type Target = SslRef;
 
