@@ -970,7 +970,7 @@ impl Ssl3AlertLevel {
 
 /// A builder for `SslContext`s.
 pub struct SslContextBuilder {
-    ctx: SslContext
+    ctx: SslContext,
 }
 
 impl SslContextBuilder {

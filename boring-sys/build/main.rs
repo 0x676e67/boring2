@@ -487,7 +487,7 @@ fn ensure_patches_applied(config: &Config) -> io::Result<()> {
         config,
         "boringssl-44b3df6f03d85c901767250329c571db405122d5.patch",
     )?;
-    
+
     if config.features.underscore_wildcards {
         println!("cargo:warning=applying underscore wildcards patch to boringssl");
         apply_patch(config, "underscore-wildcards.patch")?;
