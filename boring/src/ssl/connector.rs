@@ -315,6 +315,7 @@ impl ConnectConfiguration {
         unsafe { ffi::SSL_set_alps_use_new_codepoint(self.as_ptr(), use_new as _) }
     }
 }
+
 impl Deref for ConnectConfiguration {
     type Target = SslRef;
 
