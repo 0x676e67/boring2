@@ -1163,6 +1163,19 @@ impl SslContextBuilder {
         }
     }
 
+    /// Sets a custom certificate store for verifying peer certificates.
+    #[corresponds(SSL_CTX_set1_verify_cert_store)]
+    pub fn set_verify_cert_store_ref(
+        &mut self,
+        cert_store: &'static X509Store,
+    ) -> Result<(), ErrorStack> {
+        unsafe {
+            cvt(ffi::SSL_CTX_set1_verify_cert_store(self.as_ptr(), cert_store.as_ptr()) as c_int)?;
+
+            Ok(())
+        }
+    }
+
     /// Replaces the context's certificate store.
     #[corresponds(SSL_CTX_set_cert_store)]
     pub fn set_cert_store(&mut self, cert_store: X509Store) {
