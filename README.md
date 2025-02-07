@@ -6,11 +6,11 @@ BoringSSL bindings are available for the Rust programming language, and the HTTP
 
 ## Non-goals
 
-This package is focused solely on implementing the TLS extensions spec. It supports the original [boring](https://github.com/cloudflare/boring) , including:
+This package only implements the TLS extensions spec and supports the original [boring](https://github.com/cloudflare/boring) with the following features:
 
-* Safari required TLS extensions
-* Firefox required TLS extensions
-* `kDHE` & `ffdhe2048`/`ffdhe3072` implementations
+* Safari and Firefox required TLS extensions
+* `kDHE` and `ffdhe2048`/`ffdhe3072` implementations
+* Removal of `RPK` support
 
 ## Contribution
 
