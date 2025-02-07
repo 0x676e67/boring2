@@ -314,6 +314,30 @@ impl ConnectConfiguration {
     pub fn set_alps_use_new_codepoint(&mut self, use_new: bool) {
         unsafe { ffi::SSL_set_alps_use_new_codepoint(self.as_ptr(), use_new as _) }
     }
+
+    /// Sets the SSL options.
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - An `SslOptions` bitmask representing the options to set.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), ErrorStack>` - Returns `Ok(())` if the operation is successful, otherwise returns an `ErrorStack`.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it calls an FFI function.
+    #[corresponds(SSL_set_options)]
+    pub fn set_options(&mut self, options: SslOptions) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_set_options(self.as_ptr(), options.bits()) as _).map(|_| ()) }
+    }
+}
+
+#[test]
+fn test_options() {
+    use crate::ssl::SslOptions;
+    print!("{:?}", SslOptions::NO_TICKET.bits());
 }
 
 impl Deref for ConnectConfiguration {
