@@ -4400,7 +4400,7 @@ index 5c7e881bf..3c0770cf3 100644
    crypto/pkcs8/test/no_encryption.p12
    crypto/pkcs8/test/nss.p12
 diff --git a/src/ssl/extensions.cc b/src/ssl/extensions.cc
-index 5ee280221..b42f332a1 100644
+index 5ee280221..dbdd8b305 100644
 --- a/src/ssl/extensions.cc
 +++ b/src/ssl/extensions.cc
 @@ -207,6 +207,10 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
@@ -4499,7 +4499,44 @@ index 5ee280221..b42f332a1 100644
    return CBBFinishArray(cbb.get(), &hs->key_share_bytes);
  }
  
-@@ -2808,9 +2835,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
+@@ -2372,13 +2399,20 @@ bool ssl_ext_key_share_parse_serverhello(SSL_HANDSHAKE *hs,
+   }
+ 
+   SSLKeyShare *key_share = hs->key_shares[0].get();
++  // group_id is the server chosen group_id, and if key_share[0] is not chosen
+   if (key_share->GroupID() != group_id) {
++    // the server also did not choose the second one
+     if (!hs->key_shares[1] || hs->key_shares[1]->GroupID() != group_id) {
+-      *out_alert = SSL_AD_ILLEGAL_PARAMETER;
+-      OPENSSL_PUT_ERROR(SSL, SSL_R_WRONG_CURVE);
+-      return false;
++      // the server also did not choose the third one, we are out of options
++      if (!hs->key_shares[2] || hs->key_shares[2]->GroupID() != group_id) {
++        *out_alert = SSL_AD_ILLEGAL_PARAMETER;
++        OPENSSL_PUT_ERROR(SSL, SSL_R_WRONG_CURVE);
++        return false;
++      }
++      key_share = hs->key_shares[2].get();  // choose the third one
++    } else {
++      key_share = hs->key_shares[1].get();  // choose the second one
+     }
+-    key_share = hs->key_shares[1].get();
+   }
+ 
+   if (!key_share->Decap(out_secret, out_alert, ciphertext)) {
+@@ -2386,9 +2420,11 @@ bool ssl_ext_key_share_parse_serverhello(SSL_HANDSHAKE *hs,
+     return false;
+   }
+ 
++  // choose the first one
+   hs->new_session->group_id = group_id;
+   hs->key_shares[0].reset();
+   hs->key_shares[1].reset();
++  hs->key_shares[2].reset();
+   return true;
+ }
+ 
+@@ -2808,9 +2844,30 @@ static bool ext_quic_transport_params_add_serverhello_legacy(SSL_HANDSHAKE *hs,
  static bool ext_delegated_credential_add_clienthello(
      const SSL_HANDSHAKE *hs, CBB *out, CBB *out_compressible,
      ssl_client_hello_type_t type) {
@@ -4530,7 +4567,7 @@ index 5ee280221..b42f332a1 100644
  static bool ext_delegated_credential_parse_clienthello(SSL_HANDSHAKE *hs,
                                                         uint8_t *out_alert,
                                                         CBS *contents) {
-@@ -2957,9 +3005,10 @@ bool ssl_get_local_application_settings(const SSL_HANDSHAKE *hs,
+@@ -2957,9 +3014,10 @@ bool ssl_get_local_application_settings(const SSL_HANDSHAKE *hs,
    return false;
  }
  
@@ -4544,7 +4581,7 @@ index 5ee280221..b42f332a1 100644
    const SSL *const ssl = hs->ssl;
    if (// ALPS requires TLS 1.3.
        hs->max_version < TLS1_3_VERSION ||
-@@ -2972,8 +3021,18 @@ static bool ext_alps_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
+@@ -2972,8 +3030,18 @@ static bool ext_alps_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
      return true;
    }
  
@@ -4564,7 +4601,7 @@ index 5ee280221..b42f332a1 100644
        !CBB_add_u16_length_prefixed(out_compressible, &contents) ||
        !CBB_add_u16_length_prefixed(&contents, &proto_list)) {
      return false;
-@@ -2990,8 +3049,24 @@ static bool ext_alps_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
+@@ -2990,8 +3058,24 @@ static bool ext_alps_add_clienthello(const SSL_HANDSHAKE *hs, CBB *out,
    return CBB_flush(out_compressible);
  }
  
@@ -4591,7 +4628,7 @@ index 5ee280221..b42f332a1 100644
    SSL *const ssl = hs->ssl;
    if (contents == nullptr) {
      return true;
-@@ -3000,6 +3075,7 @@ static bool ext_alps_parse_serverhello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3000,6 +3084,7 @@ static bool ext_alps_parse_serverhello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    assert(!ssl->s3->initial_handshake_complete);
    assert(!hs->config->alpn_client_proto_list.empty());
    assert(!hs->config->alps_configs.empty());
@@ -4599,7 +4636,7 @@ index 5ee280221..b42f332a1 100644
  
    // ALPS requires TLS 1.3.
    if (ssl_protocol_version(ssl) < TLS1_3_VERSION) {
-@@ -3019,7 +3095,21 @@ static bool ext_alps_parse_serverhello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3019,7 +3104,21 @@ static bool ext_alps_parse_serverhello(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4622,7 +4659,7 @@ index 5ee280221..b42f332a1 100644
    SSL *const ssl = hs->ssl;
    // If early data is accepted, we omit the ALPS extension. It is implicitly
    // carried over from the previous connection.
-@@ -3029,8 +3119,18 @@ static bool ext_alps_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
+@@ -3029,8 +3128,18 @@ static bool ext_alps_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
      return true;
    }
  
@@ -4642,7 +4679,7 @@ index 5ee280221..b42f332a1 100644
        !CBB_add_u16_length_prefixed(out, &contents) ||
        !CBB_add_bytes(&contents,
                       hs->new_session->local_application_settings.data(),
-@@ -3042,6 +3142,14 @@ static bool ext_alps_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
+@@ -3042,6 +3151,14 @@ static bool ext_alps_add_serverhello(SSL_HANDSHAKE *hs, CBB *out) {
    return true;
  }
  
@@ -4657,7 +4694,7 @@ index 5ee280221..b42f332a1 100644
  bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
                          const SSL_CLIENT_HELLO *client_hello) {
    SSL *const ssl = hs->ssl;
-@@ -3094,6 +3202,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
+@@ -3094,6 +3211,39 @@ bool ssl_negotiate_alps(SSL_HANDSHAKE *hs, uint8_t *out_alert,
    return true;
  }
  
@@ -4697,7 +4734,7 @@ index 5ee280221..b42f332a1 100644
  // kExtensions contains all the supported extensions.
  static const struct tls_extension kExtensions[] = {
    {
-@@ -3267,6 +3408,21 @@ static const struct tls_extension kExtensions[] = {
+@@ -3267,6 +3417,21 @@ static const struct tls_extension kExtensions[] = {
      ignore_parse_clienthello,
      ext_alps_add_serverhello,
    },
@@ -4719,7 +4756,7 @@ index 5ee280221..b42f332a1 100644
  };
  
  #define kNumExtensions (sizeof(kExtensions) / sizeof(struct tls_extension))
-@@ -3280,6 +3436,12 @@ static_assert(kNumExtensions <=
+@@ -3280,6 +3445,12 @@ static_assert(kNumExtensions <=
  
  bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs) {
    if (!hs->config->permute_extensions) {
@@ -4732,7 +4769,7 @@ index 5ee280221..b42f332a1 100644
      return true;
    }
  
-@@ -3357,10 +3519,16 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
+@@ -3357,10 +3528,16 @@ static bool ssl_add_clienthello_tlsext_inner(SSL_HANDSHAKE *hs, CBB *out,
      }
    }
  
@@ -4750,7 +4787,7 @@ index 5ee280221..b42f332a1 100644
      const size_t len_before = CBB_len(&extensions);
      const size_t len_compressed_before = CBB_len(compressed.get());
      if (!kExtensions[i].add_clienthello(hs, &extensions, compressed.get(),
-@@ -3466,10 +3634,16 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
+@@ -3466,10 +3643,16 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
    }
  
    bool last_was_empty = false;

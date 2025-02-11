@@ -432,6 +432,12 @@ static SSL_INDEXES: LazyLock<Mutex<HashMap<TypeId, c_int>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static SESSION_CTX_INDEX: LazyLock<Index<Ssl, SslContext>> =
     LazyLock::new(|| Ssl::new_ex_index().unwrap());
+<<<<<<< HEAD
+=======
+#[cfg(feature = "rpk")]
+static RPK_FLAG_INDEX: LazyLock<Index<SslContext, bool>> =
+    LazyLock::new(|| SslContext::new_ex_index().unwrap());
+>>>>>>> upstream/master
 
 unsafe extern "C" fn free_data_box<T>(
     _parent: *mut c_void,
