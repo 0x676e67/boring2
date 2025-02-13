@@ -24,6 +24,7 @@ include = [
     "/deps/boringssl/sources.json",
     "/deps/boringssl/src/crypto/obj/obj_mac.num",
     "/deps/boringssl/src/crypto/obj/objects.txt",
+    "/deps/boringssl/src/util/32-bit-toolchain.cmake",
     "/deps/boringssl/**/*.bzl",
     "/deps/boringssl/src/**/*.cc",
     "/deps/boringssl/**/CMakeLists.txt",
