@@ -6241,7 +6241,7 @@ index 09a9ad380..9c583b5ec 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..9c4a340d0 100644
+index 838761af5..d187cf56c 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -6277,17 +6277,18 @@ index 838761af5..9c4a340d0 100644
    ssl->config->handoff = ctx->handoff;
    ssl->quic_method = ctx->quic_method;
  
-@@ -707,7 +711,8 @@ SSL_CONFIG::SSL_CONFIG(SSL *ssl_arg)
+@@ -707,7 +711,9 @@ SSL_CONFIG::SSL_CONFIG(SSL *ssl_arg)
        shed_handshake_config(false),
        jdk11_workaround(false),
        quic_use_legacy_codepoint(false),
 -      permute_extensions(false) {
 +      permute_extensions(false),
-+      key_shares_limit(0) {
++      key_shares_limit(0),
++      alps_use_new_codepoint(false) {
    assert(ssl);
  }
  
-@@ -2134,6 +2139,28 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -2134,6 +2140,28 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl->config->ocsp_stapling_enabled = true;
  }
  
@@ -6316,7 +6317,7 @@ index 838761af5..9c4a340d0 100644
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -2327,6 +2354,13 @@ int SSL_has_application_settings(const SSL *ssl) {
+@@ -2327,6 +2355,13 @@ int SSL_has_application_settings(const SSL *ssl) {
    return session && session->has_application_settings;
  }
  
@@ -6330,7 +6331,7 @@ index 838761af5..9c4a340d0 100644
  int SSL_CTX_add_cert_compression_alg(SSL_CTX *ctx, uint16_t alg_id,
                                       ssl_cert_compression_func_t compress,
                                       ssl_cert_decompression_func_t decompress) {
-@@ -2939,6 +2973,24 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+@@ -2939,6 +2974,24 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
    ssl->config->permute_extensions = !!enabled;
  }
  
@@ -6355,7 +6356,7 @@ index 838761af5..9c4a340d0 100644
  int32_t SSL_get_ticket_age_skew(const SSL *ssl) {
    return ssl->s3->ticket_age_skew;
  }
-@@ -3151,7 +3203,7 @@ namespace fips202205 {
+@@ -3151,7 +3204,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"
