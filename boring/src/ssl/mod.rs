@@ -108,6 +108,8 @@ pub use self::cert_compression::CertCompressionAlgorithm;
 pub use self::connector::{
     ConnectConfiguration, SslAcceptor, SslAcceptorBuilder, SslConnector, SslConnectorBuilder,
 };
+#[cfg(not(feature = "fips"))]
+pub use self::ech::SslEchKeysRef;
 pub use self::error::{Error, ErrorCode, HandshakeError};
 
 mod async_callbacks;
@@ -2018,7 +2020,7 @@ impl SslContextBuilder {
     /// threads.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_CTX_set1_ech_keys)]
-    pub fn set_ech_keys(&mut self, keys: SslEchKeys) -> Result<(), ErrorStack> {
+    pub fn set_ech_keys(&self, keys: &SslEchKeys) -> Result<(), ErrorStack> {
         unsafe { cvt(ffi::SSL_CTX_set1_ech_keys(self.as_ptr(), keys.as_ptr())).map(|_| ()) }
     }
 
@@ -2252,6 +2254,16 @@ impl SslContextRef {
     pub fn verify_mode(&self) -> SslVerifyMode {
         let mode = unsafe { ffi::SSL_CTX_get_verify_mode(self.as_ptr()) };
         SslVerifyMode::from_bits(mode).expect("SSL_CTX_get_verify_mode returned invalid mode")
+    }
+
+    /// Registers a list of ECH keys on the context. This list should contain new and old
+    /// ECHConfigs to allow stale DNS caches to update. Unlike most `SSL_CTX` APIs, this function
+    /// is safe to call even after the `SSL_CTX` has been associated with connections on various
+    /// threads.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_CTX_set1_ech_keys)]
+    pub fn set_ech_keys(&self, keys: &SslEchKeys) -> Result<(), ErrorStack> {
+        unsafe { cvt(ffi::SSL_CTX_set1_ech_keys(self.as_ptr(), keys.as_ptr())).map(|_| ()) }
     }
 }
 
