@@ -6334,7 +6334,7 @@ index 09a9ad380..9c583b5ec 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..c4f4932c1 100644
+index 838761af5..6f96d6eee 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -6416,7 +6416,7 @@ index 838761af5..c4f4932c1 100644
 +  ctx->aes_hw_override_value = !!override_value;
 +}
 +
-+void SSL_set_aes_jhw_override(SSL *ssl, int override_value) {
++void SSL_set_aes_hw_override(SSL *ssl, int override_value) {
 +  if (!ssl->config) {
 +    return;
 +  }
