@@ -275,6 +275,13 @@ impl ConnectConfiguration {
         unsafe { ffi::SSL_set_enable_ech_grease(self.as_ptr(), enable as _) }
     }
 
+    /// Sets whether the aes hardware override should be enabled.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_set_aes_hw_override)]
+    pub fn set_aes_hw_override(&mut self, enable: bool) {
+        unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable as _) }
+    }
+
     /// Adds application settings.
     ///
     /// # Arguments

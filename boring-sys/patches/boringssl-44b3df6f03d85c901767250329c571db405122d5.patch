@@ -4270,7 +4270,7 @@ index 4dd8841b1..23ffcd446 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..ea01fd665 100644
+index 53aa9b453..0000201ab 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -718,6 +718,12 @@ OPENSSL_EXPORT int SSL_version(const SSL *ssl);
@@ -4310,7 +4310,7 @@ index 53aa9b453..ea01fd665 100644
  
  // Certificate compression.
  //
-@@ -4570,6 +4586,27 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4570,6 +4586,39 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
@@ -4335,10 +4335,22 @@ index 53aa9b453..ea01fd665 100644
 +// send three key shares.
 +OPENSSL_EXPORT void SSL_CTX_set_key_shares_limit(SSL_CTX *ctx, uint8_t limit);
 +
++
++// SSL_CTX_set_aes_hw_override sets |override_value| to
++// override checking for aes hardware support. If |override_value|
++// is set to true, the library will behave as if aes hardware support is
++// present. If it is set to false, the library will behave as if aes hardware
++// support is not present.
++OPENSSL_EXPORT void SSL_CTX_set_aes_hw_override(SSL_CTX *ctx, int override_value);
++
++// SSL_set_aes_hw_override acts the same as
++// |SSL_CTX_set_aes_override| but only configures a single |SSL*|.
++OPENSSL_EXPORT void SSL_set_aes_hw_override(SSL *ssl, int override_value);
++
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -4874,6 +4911,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -4874,6 +4923,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -4349,7 +4361,7 @@ index 53aa9b453..ea01fd665 100644
  #define SSL_set_app_data(s, arg) (SSL_set_ex_data(s, 0, (char *)(arg)))
  #define SSL_get_app_data(s) (SSL_get_ex_data(s, 0))
  #define SSL_SESSION_set_app_data(s, a) \
-@@ -4926,7 +4967,6 @@ DEFINE_STACK_OF(SSL_COMP)
+@@ -4926,7 +4979,6 @@ DEFINE_STACK_OF(SSL_COMP)
  #define SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG 0
  #define SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG 0
  #define SSL_OP_NO_COMPRESSION 0
@@ -4357,7 +4369,7 @@ index 53aa9b453..ea01fd665 100644
  #define SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION 0
  #define SSL_OP_NO_SSLv2 0
  #define SSL_OP_NO_SSLv3 0
-@@ -5779,6 +5819,7 @@ BSSL_NAMESPACE_END
+@@ -5779,6 +5831,7 @@ BSSL_NAMESPACE_END
  #define SSL_R_ECH_REJECTED 319
  #define SSL_R_INVALID_OUTER_EXTENSION 320
  #define SSL_R_INCONSISTENT_ECH_NEGOTIATION 321
@@ -6322,10 +6334,35 @@ index 09a9ad380..9c583b5ec 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..d187cf56c 100644
+index 838761af5..88c607302 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
-@@ -537,7 +537,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
+@@ -495,6 +495,24 @@ void SSL_set_aes_hw_override_for_testing(SSL *ssl, bool override_value) {
+   ssl->config->aes_hw_override_value = override_value;
+ }
+ 
++void SSL_CTX_set_aes_hw_override(SSL_CTX *ctx, int override_value) {
++  if (!ctx) {
++    return;
++  }
++  
++  ctx->aes_hw_override = true;
++  ctx->aes_hw_override_value = !!override_value;
++}
++
++void SSL_set_aes_hw_override(SSL *ssl, int override_value) {
++  if (!ssl->config) {
++    return;
++  }
++
++  ssl->config->aes_hw_override = true;
++  ssl->config->aes_hw_override_value = !!override_value;
++}
++
+ BSSL_NAMESPACE_END
+ 
+ using namespace bssl;
+@@ -537,7 +555,8 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
        handoff(false),
        enable_early_data(false),
        aes_hw_override(false),
@@ -6335,7 +6372,7 @@ index 838761af5..d187cf56c 100644
    CRYPTO_MUTEX_init(&lock);
    CRYPTO_new_ex_data(&ex_data);
  }
-@@ -660,11 +661,13 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -660,11 +679,13 @@ SSL *SSL_new(SSL_CTX *ctx) {
    ssl->config->aes_hw_override = ctx->aes_hw_override;
    ssl->config->aes_hw_override_value = ctx->aes_hw_override_value;
    ssl->config->tls13_cipher_policy = ctx->tls13_cipher_policy;
@@ -6350,7 +6387,7 @@ index 838761af5..d187cf56c 100644
      return nullptr;
    }
  
-@@ -684,6 +687,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
+@@ -684,6 +705,7 @@ SSL *SSL_new(SSL_CTX *ctx) {
    ssl->config->signed_cert_timestamps_enabled =
        ctx->signed_cert_timestamps_enabled;
    ssl->config->ocsp_stapling_enabled = ctx->ocsp_stapling_enabled;
@@ -6358,7 +6395,7 @@ index 838761af5..d187cf56c 100644
    ssl->config->handoff = ctx->handoff;
    ssl->quic_method = ctx->quic_method;
  
-@@ -707,7 +711,9 @@ SSL_CONFIG::SSL_CONFIG(SSL *ssl_arg)
+@@ -707,7 +729,9 @@ SSL_CONFIG::SSL_CONFIG(SSL *ssl_arg)
        shed_handshake_config(false),
        jdk11_workaround(false),
        quic_use_legacy_codepoint(false),
@@ -6369,7 +6406,7 @@ index 838761af5..d187cf56c 100644
    assert(ssl);
  }
  
-@@ -2134,6 +2140,28 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -2134,6 +2158,28 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl->config->ocsp_stapling_enabled = true;
  }
  
@@ -6398,7 +6435,7 @@ index 838761af5..d187cf56c 100644
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -2327,6 +2355,13 @@ int SSL_has_application_settings(const SSL *ssl) {
+@@ -2327,6 +2373,13 @@ int SSL_has_application_settings(const SSL *ssl) {
    return session && session->has_application_settings;
  }
  
@@ -6412,7 +6449,7 @@ index 838761af5..d187cf56c 100644
  int SSL_CTX_add_cert_compression_alg(SSL_CTX *ctx, uint16_t alg_id,
                                       ssl_cert_compression_func_t compress,
                                       ssl_cert_decompression_func_t decompress) {
-@@ -2939,6 +2974,24 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+@@ -2939,6 +2992,24 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
    ssl->config->permute_extensions = !!enabled;
  }
  
@@ -6437,7 +6474,7 @@ index 838761af5..d187cf56c 100644
  int32_t SSL_get_ticket_age_skew(const SSL *ssl) {
    return ssl->s3->ticket_age_skew;
  }
-@@ -3151,7 +3204,7 @@ namespace fips202205 {
+@@ -3151,7 +3222,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"

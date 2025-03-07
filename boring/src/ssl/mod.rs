@@ -1863,6 +1863,13 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_key_shares_limit(self.as_ptr(), limit as _) }
     }
 
+    /// Sets whether the aes hardware override should be enabled.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_CTX_set_aes_hw_override)]
+    pub fn set_aes_hw_override(&mut self, enable: bool) {
+        unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
+    }
+
     /// Sets whether the context should enable there key share extension.
     #[deprecated(since = "4.13.8", note = "use `set_key_shares_limit` instead")]
     #[corresponds(SSL_CTX_set_key_shares_limit)]
