@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "4.15.9-rc1"
+version = "4.15.8"
 repository = "https://github.com/0x676e67/boring2"
 edition = "2021"
 
@@ -18,9 +18,9 @@ tag-prefix = ""
 publish = false
 
 [workspace.dependencies]
-boring-sys = { package = "boring-sys2", version = "4.15.9-rc1", path = "./boring-sys" }
-boring = { package = "boring2", version = "4.15.9-rc.0", path = "./boring" }
-tokio-boring = { package = "tokio-boring2", version = "4.15.9-rc1", path = "./tokio-boring" }
+boring-sys = { package = "boring-sys2", version = "4.15.8", path = "./boring-sys" }
+boring = { package = "boring2", version = "4.15.8", path = "./boring" }
+tokio-boring = { package = "tokio-boring2", version = "4.15.8", path = "./tokio-boring" }
 
 bindgen = { version = "0.70.1", default-features = false, features = ["runtime"] }
 bytes = "1"
