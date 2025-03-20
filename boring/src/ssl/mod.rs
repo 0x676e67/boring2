@@ -609,35 +609,16 @@ impl ExtensionType {
 
     /// Returns the index of the given extension type in the permutation.
     pub const fn index_of(value: ExtensionType) -> Option<usize> {
-        match value {
-            ExtensionType::SERVER_NAME => Some(0),
-            ExtensionType::ENCRYPTED_CLIENT_HELLO => Some(1),
-            ExtensionType::EXTENDED_MASTER_SECRET => Some(2),
-            ExtensionType::RENEGOTIATE => Some(3),
-            ExtensionType::SUPPORTED_GROUPS => Some(4),
-            ExtensionType::EC_POINT_FORMATS => Some(5),
-            ExtensionType::SESSION_TICKET => Some(6),
-            ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION => Some(7),
-            ExtensionType::STATUS_REQUEST => Some(8),
-            ExtensionType::SIGNATURE_ALGORITHMS => Some(9),
-            ExtensionType::NEXT_PROTO_NEG => Some(10),
-            ExtensionType::CERTIFICATE_TIMESTAMP => Some(11),
-            ExtensionType::CHANNEL_ID => Some(12),
-            ExtensionType::SRTP => Some(13),
-            ExtensionType::KEY_SHARE => Some(14),
-            ExtensionType::PSK_KEY_EXCHANGE_MODES => Some(15),
-            ExtensionType::EARLY_DATA => Some(16),
-            ExtensionType::SUPPORTED_VERSIONS => Some(17),
-            ExtensionType::COOKIE => Some(18),
-            ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD => Some(19),
-            ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY => Some(20),
-            ExtensionType::CERT_COMPRESSION => Some(21),
-            ExtensionType::DELEGATED_CREDENTIAL => Some(22),
-            ExtensionType::APPLICATION_SETTINGS => Some(23),
-            ExtensionType::APPLICATION_SETTINGS_NEW => Some(24),
-            ExtensionType::RECORD_SIZE_LIMIT => Some(25),
-            _ => None,
+        let mut i = 0;
+        while i < Self::BORING_SSLEXTENSION_PERMUTATION.len() {
+            if i < Self::BORING_SSLEXTENSION_PERMUTATION.len()
+                && Self::BORING_SSLEXTENSION_PERMUTATION[i].0 == value.0
+            {
+                return Some(i);
+            }
+            i += 1;
         }
+        None
     }
 }
 

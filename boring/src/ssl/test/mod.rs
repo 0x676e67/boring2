@@ -28,6 +28,7 @@ mod cert_verify;
 mod custom_verify;
 #[cfg(not(feature = "fips"))]
 mod ech;
+mod extensions;
 mod private_key_method;
 mod server;
 mod session;
