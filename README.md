@@ -11,7 +11,7 @@ This package only implements the TLS extensions spec and supports the original [
 
 * Safari and Firefox required TLS extensions
 * kDHE, ffdhe2048 and ffdhe3072 implementations
-* Removal of `RPK` support
+* Removal of RPK support
 
 ## Contribution
 
