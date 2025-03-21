@@ -268,26 +268,20 @@ jobs:
     - name: Build for ${{ matrix.target }}
       run: cargo build --target ${{ matrix.target }} --all-targets
 
-  # test-features:
-  #   name: Test features
-  #   runs-on: ubuntu-20.04
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #     with:
-  #       submodules: 'recursive'
-  #   - name: Install Rust (rustup)
-  #     run: rustup update stable --no-self-update && rustup default stable
-  #   - run: cargo test --features pq-experimental
-  #     name: Run `pq-experimental` tests
-  #   - run: cargo test --features underscore-wildcards
-  #     name: Run `underscore-wildcards` tests
-  #   - run: cargo test --features kx-safe-default,pq-experimental
-  #     name: Run `kx-safe-default` tests
-  #   - run: cargo test --features pq-experimental,underscore-wildcards
-  #     name: Run `pq-experimental,underscore-wildcards` tests
-  #   - run: cargo test --features rpk,underscore-wildcards
-  #     name: Run `rpk,underscore-wildcards` tests
-  #   - run: cargo test --features pq-experimental,rpk,underscore-wildcards
-  #     name: Run `pq-experimental,rpk,underscore-wildcards` tests
-  #   - run: cargo test -p hyper-boring --features hyper1
-  #     name: Run hyper 1.0 tests for hyper-boring
+  test-features:
+    name: Test features
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    - name: Install Rust (rustup)
+      run: rustup update stable --no-self-update && rustup default stable
+    - run: cargo test --features pq-experimental
+      name: Run `pq-experimental` tests
+    - run: cargo test --features kx-safe-default,pq-experimental
+      name: Run `kx-safe-default` tests
+    - run: cargo test --features pq-experimental,underscore-wildcards
+      name: Run `pq-experimental,underscore-wildcards` tests
+    - run: cargo test --features underscore-wildcards
+      name: Run `underscore-wildcards` tests
