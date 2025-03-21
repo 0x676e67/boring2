@@ -1,5 +1,6 @@
 # boring2
 
+[![CI](https://github.com/0x676e67/boring2/actions/workflows/ci.yml/badge.svg)](https://github.com/0x676e67/boring2/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/boring2.svg)](https://crates.io/crates/boring2)
 
 BoringSSL bindings are available for the Rust programming language, and the HTTP [Client](https://github.com/0x676e67/rquest) is built on top of it.
@@ -9,7 +10,7 @@ BoringSSL bindings are available for the Rust programming language, and the HTTP
 This package only implements the TLS extensions spec and supports the original [boring](https://github.com/cloudflare/boring) with the following features:
 
 * Safari and Firefox required TLS extensions
-* `kDHE` and `ffdhe2048`/`ffdhe3072` implementations
+* kDHE, ffdhe2048 and ffdhe3072 implementations
 * Removal of `RPK` support
 
 ## Contribution
