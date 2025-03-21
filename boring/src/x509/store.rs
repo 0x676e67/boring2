@@ -46,7 +46,6 @@ use crate::stack::StackRef;
 use crate::x509::verify::{X509VerifyFlags, X509VerifyParamRef};
 use crate::x509::{X509Object, X509};
 use crate::{cvt, cvt_p};
-use ffi::X509_STORE_up_ref;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use openssl_macros::corresponds;
 use std::mem;
@@ -137,7 +136,7 @@ impl ToOwned for X509StoreRef {
 
     fn to_owned(&self) -> Self::Owned {
         unsafe {
-            X509_STORE_up_ref(self.as_ptr());
+            ffi::X509_STORE_up_ref(self.as_ptr());
             X509Store::from_ptr(self.as_ptr())
         }
     }
