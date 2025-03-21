@@ -77,13 +77,6 @@ async fn with_async_custom_verify_callback_error(
     let server = async {
         let err = stream.await.unwrap_err();
 
-        #[cfg(target_os = "windows")]
-        assert_eq!(
-            err.to_string(),
-            "TLS handshake failed An existing connection was forcibly closed by the remote host. (os error 10054)"
-        );
-
-        #[cfg(not(target_os = "windows"))]
         assert_eq!(
             err.to_string(),
             "TLS handshake failed [SSLV3_ALERT_CERTIFICATE_REVOKED]"

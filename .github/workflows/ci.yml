@@ -178,19 +178,19 @@ jobs:
             CPLUS_INCLUDE_PATH: "C:\\msys64\\usr\\include"
             LIBRARY_PATH: "C:\\msys64\\usr\\lib"
           # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring --exclude hyper-boring
+          extra_test_args: --workspace --exclude tokio-boring2 --exclude hyper-boring2
         - thing: i686-msvc
           target: i686-pc-windows-msvc
           rust: stable-x86_64-msvc
           os: windows-latest
           # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring --exclude hyper-boring
+          extra_test_args: --workspace --exclude tokio-boring2 --exclude hyper-boring2
         - thing: x86_64-msvc
           target: x86_64-pc-windows-msvc
           rust: stable-x86_64-msvc
           os: windows-latest
           # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring --exclude hyper-boring
+          extra_test_args: --workspace --exclude tokio-boring2 --exclude hyper-boring2
 
     steps:
     - uses: actions/checkout@v4
