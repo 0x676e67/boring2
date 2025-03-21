@@ -46,6 +46,7 @@ use crate::stack::StackRef;
 use crate::x509::verify::{X509VerifyFlags, X509VerifyParamRef};
 use crate::x509::{X509Object, X509};
 use crate::{cvt, cvt_p};
+use ffi::X509_STORE_up_ref;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use openssl_macros::corresponds;
 use std::mem;
@@ -123,6 +124,23 @@ foreign_type_and_impl_send_sync! {
 
     /// A certificate store to hold trusted `X509` certificates.
     pub struct X509Store;
+}
+
+impl Clone for X509Store {
+    fn clone(&self) -> Self {
+        (**self).to_owned()
+    }
+}
+
+impl ToOwned for X509StoreRef {
+    type Owned = X509Store;
+
+    fn to_owned(&self) -> Self::Owned {
+        unsafe {
+            X509_STORE_up_ref(self.as_ptr());
+            X509Store::from_ptr(self.as_ptr())
+        }
+    }
 }
 
 impl X509StoreRef {
