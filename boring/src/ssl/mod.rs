@@ -1156,6 +1156,7 @@ impl SslContextBuilder {
     }
 
     /// Sets a custom certificate store for verifying peer certificates.
+    #[deprecated(since = "4.15.13", note = "Use `set_verify_cert_store` instead.")]
     #[corresponds(SSL_CTX_set1_verify_cert_store)]
     pub fn set_verify_cert_store_ref(
         &mut self,
