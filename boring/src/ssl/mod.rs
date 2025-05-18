@@ -105,7 +105,7 @@ pub use self::async_callbacks::{
 };
 #[deprecated(
     since = "4.15.13",
-    note = "Use `boring2::ssl::CertificateCompressor` instead"
+    note = "Use `boring2::ssl::CertificateCompressionAlgorithm` instead"
 )]
 #[cfg(feature = "cert-compression")]
 pub use self::cert_compression::CertCompressionAlgorithm;
