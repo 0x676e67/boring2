@@ -3,6 +3,11 @@ use std::{io::Read, slice};
 
 /// IANA assigned identifier of compression algorithm.
 /// See https://www.rfc-editor.org/rfc/rfc8879.html#name-compression-algorithms
+#[deprecated(
+    since = "4.15.13",
+    note = "This enum is deprecated and will be removed in a future version. \
+            Use `boring::ssl::CertificateCompressionAlgorithm` instead."
+)]
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CertCompressionAlgorithm {

@@ -103,6 +103,10 @@ pub use self::async_callbacks::{
     BoxCustomVerifyFuture, BoxGetSessionFinish, BoxGetSessionFuture, BoxPrivateKeyMethodFinish,
     BoxPrivateKeyMethodFuture, BoxSelectCertFinish, BoxSelectCertFuture, ExDataFuture,
 };
+#[deprecated(
+    since = "4.15.13",
+    note = "Use `boring2::ssl::CertificateCompressor` instead"
+)]
 #[cfg(feature = "cert-compression")]
 pub use self::cert_compression::CertCompressionAlgorithm;
 pub use self::connector::{
@@ -1364,6 +1368,10 @@ impl SslContextBuilder {
     }
 
     /// Sets whether a certificate compression algorithm should be used.
+    #[deprecated(
+        since = "4.15.13",
+        note = "Use `add_certificate_compression_algorithm` instead."
+    )]
     #[cfg(feature = "cert-compression")]
     #[corresponds(SSL_CTX_add_cert_compression_alg)]
     pub fn add_cert_compression_alg(
@@ -1945,6 +1953,7 @@ impl SslContextBuilder {
     /// The indices must be in the range [0, 25).
     /// Extension duplication will be verified by the user.
     /// If duplication occurs, TLS connection failure may occur.
+    #[deprecated(since = "4.15.13", note = "use `set_extension_permutation` instead")]
     #[corresponds(SSL_CTX_set_extension_permutation)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
