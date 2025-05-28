@@ -661,13 +661,14 @@ fn main() {
     let bssl_dir = built_boring_source_path(&config);
     let build_path = get_boringssl_platform_output_path(&config);
 
-    if config.is_bazel || (config.features.fips && config.env.path.is_some()) {
+    if config.is_bazel || (config.features.is_fips_like() && config.env.path.is_some()) {
         println!(
             "cargo:rustc-link-search=native={}/lib/{}",
             bssl_dir.display(),
             build_path
         );
     } else {
+        // todo(rmehra): clean this up, I think these are pretty redundant
         println!(
             "cargo:rustc-link-search=native={}/build/crypto/{}",
             bssl_dir.display(),
@@ -699,6 +700,11 @@ fn main() {
     println!("cargo:rustc-link-lib=static=crypto");
     println!("cargo:rustc-link-lib=static=ssl");
 
+    if config.target_os == "windows" {
+        // Rust 1.87.0 compat - https://github.com/rust-lang/rust/pull/138233
+        println!("cargo:rustc-link-lib=advapi32");
+    }
+
     let include_path = config.env.include_path.clone().unwrap_or_else(|| {
         if let Some(bssl_path) = &config.env.path {
             return bssl_path.join("include");
@@ -717,9 +723,12 @@ fn main() {
     // bindgen 0.70 replaced the run-time layout tests with compile-time ones,
     // but they depend on std::mem::offset_of, stabilized in 1.77.
     let supports_layout_tests = autocfg::new().probe_rustc_version(1, 77);
+    let Ok(target_rust_version) = bindgen::RustTarget::stable(68, 0) else {
+        panic!("bindgen does not recognize target rust version");
+    };
 
     let mut builder = bindgen::Builder::default()
-        .rust_target(bindgen::RustTarget::Stable_1_68) // bindgen MSRV is 1.70, so this is enough
+        .rust_target(target_rust_version) // bindgen MSRV is 1.70, so this is enough
         .derive_copy(true)
         .derive_debug(true)
         .derive_default(true)
@@ -759,7 +768,7 @@ fn main() {
         "des.h",
         "dtls1.h",
         "hkdf.h",
-        #[cfg(not(any(feature = "fips", feature = "fips-no-compat")))]
+        #[cfg(not(feature = "fips"))]
         "hpke.h",
         "hmac.h",
         "hrss.h",
