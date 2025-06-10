@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "boring",
-    "boring-sys",
+    "boring-sys", "compio-boring",
     "tokio-boring",
 ]
 resolver = "2"
@@ -42,3 +42,4 @@ autocfg = "1.3.0"
 brotli = "8"
 flate2 = "1"
 zstd = "0.13"
+compio = "0.14.0"
