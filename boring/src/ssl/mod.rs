@@ -103,12 +103,6 @@ pub use self::async_callbacks::{
     BoxCustomVerifyFuture, BoxGetSessionFinish, BoxGetSessionFuture, BoxPrivateKeyMethodFinish,
     BoxPrivateKeyMethodFuture, BoxSelectCertFinish, BoxSelectCertFuture, ExDataFuture,
 };
-#[deprecated(
-    since = "4.15.13",
-    note = "Use `boring2::ssl::CertificateCompressionAlgorithm` instead"
-)]
-#[cfg(feature = "cert-compression")]
-pub use self::cert_compression::CertCompressionAlgorithm;
 pub use self::connector::{
     ConnectConfiguration, SslAcceptor, SslAcceptorBuilder, SslConnector, SslConnectorBuilder,
 };
@@ -119,8 +113,6 @@ pub use self::error::{Error, ErrorCode, HandshakeError};
 mod async_callbacks;
 mod bio;
 mod callbacks;
-#[cfg(feature = "cert-compression")]
-mod cert_compression;
 mod connector;
 #[cfg(not(feature = "fips"))]
 mod ech;
@@ -1198,20 +1190,6 @@ impl SslContextBuilder {
         }
     }
 
-    /// Sets a custom certificate store for verifying peer certificates.
-    #[deprecated(since = "4.15.13", note = "Use `set_verify_cert_store` instead.")]
-    #[corresponds(SSL_CTX_set1_verify_cert_store)]
-    pub fn set_verify_cert_store_ref(
-        &mut self,
-        cert_store: &'static X509Store,
-    ) -> Result<(), ErrorStack> {
-        unsafe {
-            cvt(ffi::SSL_CTX_set1_verify_cert_store(self.as_ptr(), cert_store.as_ptr()) as c_int)?;
-
-            Ok(())
-        }
-    }
-
     /// Use [`set_cert_store_builder`] or [`set_cert_store_ref`] instead.
     ///
     /// Replaces the context's certificate store.
@@ -1433,28 +1411,6 @@ impl SslContextBuilder {
         T: HasPrivate,
     {
         unsafe { cvt(ffi::SSL_CTX_use_PrivateKey(self.as_ptr(), key.as_ptr())).map(|_| ()) }
-    }
-
-    /// Sets whether a certificate compression algorithm should be used.
-    #[deprecated(
-        since = "4.15.13",
-        note = "Use `add_certificate_compression_algorithm` instead."
-    )]
-    #[cfg(feature = "cert-compression")]
-    #[corresponds(SSL_CTX_add_cert_compression_alg)]
-    pub fn add_cert_compression_alg(
-        &mut self,
-        alg: CertCompressionAlgorithm,
-    ) -> Result<(), ErrorStack> {
-        unsafe {
-            cvt(ffi::SSL_CTX_add_cert_compression_alg(
-                self.as_ptr(),
-                alg as _,
-                alg.compression_fn(),
-                alg.decompression_fn(),
-            ))
-            .map(|_| ())
-        }
     }
 
     /// Sets the list of supported ciphers for protocols before TLSv1.3.
@@ -1997,13 +1953,6 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
-    /// Sets whether the context should enable there key share extension.
-    #[deprecated(since = "4.13.8", note = "use `set_key_shares_limit` instead")]
-    #[corresponds(SSL_CTX_set_key_shares_limit)]
-    pub fn set_key_shares_length_limit(&mut self, limit: u8) {
-        self.set_key_shares_limit(limit)
-    }
-
     /// Sets the indices of the extensions to be permuted.
     ///
     /// The indices must be in the range [0, 25).
@@ -2022,25 +1971,6 @@ impl SslContextBuilder {
             }
         }
 
-        unsafe {
-            cvt(ffi::SSL_CTX_set_extension_permutation(
-                self.as_ptr(),
-                indices.as_ptr() as *const _,
-                indices.len() as _,
-            ))
-            .map(|_| ())
-        }
-    }
-
-    /// Sets the indices of the extensions to be permuted.
-    ///
-    /// The indices must be in the range [0, 25).
-    /// Extension duplication will be verified by the user.
-    /// If duplication occurs, TLS connection failure may occur.
-    #[deprecated(since = "4.15.13", note = "use `set_extension_permutation` instead")]
-    #[corresponds(SSL_CTX_set_extension_permutation)]
-    #[cfg(not(feature = "fips-compat"))]
-    pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
             cvt(ffi::SSL_CTX_set_extension_permutation(
                 self.as_ptr(),
