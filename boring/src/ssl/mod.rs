@@ -571,50 +571,6 @@ impl ExtensionType {
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
     pub const CHANNEL_ID: Self = Self(ffi::TLSEXT_TYPE_channel_id as u16);
     pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
-
-    /// The permutation of extension types used by BoringSSL.
-    pub const BORING_SSLEXTENSION_PERMUTATION: &[ExtensionType] = &[
-        ExtensionType::SERVER_NAME,
-        ExtensionType::ENCRYPTED_CLIENT_HELLO,
-        ExtensionType::EXTENDED_MASTER_SECRET,
-        ExtensionType::RENEGOTIATE,
-        ExtensionType::SUPPORTED_GROUPS,
-        ExtensionType::EC_POINT_FORMATS,
-        ExtensionType::SESSION_TICKET,
-        ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
-        ExtensionType::STATUS_REQUEST,
-        ExtensionType::SIGNATURE_ALGORITHMS,
-        ExtensionType::NEXT_PROTO_NEG,
-        ExtensionType::CERTIFICATE_TIMESTAMP,
-        ExtensionType::CHANNEL_ID,
-        ExtensionType::SRTP,
-        ExtensionType::KEY_SHARE,
-        ExtensionType::PSK_KEY_EXCHANGE_MODES,
-        ExtensionType::EARLY_DATA,
-        ExtensionType::SUPPORTED_VERSIONS,
-        ExtensionType::COOKIE,
-        ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
-        ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
-        ExtensionType::CERT_COMPRESSION,
-        ExtensionType::DELEGATED_CREDENTIAL,
-        ExtensionType::APPLICATION_SETTINGS,
-        ExtensionType::APPLICATION_SETTINGS_NEW,
-        ExtensionType::RECORD_SIZE_LIMIT,
-    ];
-
-    /// Returns the index of the given extension type in the permutation.
-    pub const fn index_of(value: ExtensionType) -> Option<usize> {
-        let mut i = 0;
-        while i < Self::BORING_SSLEXTENSION_PERMUTATION.len() {
-            if i < Self::BORING_SSLEXTENSION_PERMUTATION.len()
-                && Self::BORING_SSLEXTENSION_PERMUTATION[i].0 == value.0
-            {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
-    }
 }
 
 impl From<u16> for ExtensionType {
@@ -1958,21 +1914,14 @@ impl SslContextBuilder {
     /// The indices must be in the range [0, 25).
     /// Extension duplication will be verified by the user.
     /// If duplication occurs, TLS connection failure may occur.
-    #[corresponds(SSL_CTX_set_extension_permutation)]
+    #[corresponds(SSL_CTX_set_extension_order)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation(
         &mut self,
-        shuffled: &[ExtensionType],
+        indices: &[ExtensionType],
     ) -> Result<(), ErrorStack> {
-        let mut indices = Vec::with_capacity(shuffled.len().div_ceil(2));
-        for &ext in shuffled {
-            if let Some(index) = ExtensionType::index_of(ext) {
-                indices.push(index as u8);
-            }
-        }
-
         unsafe {
-            cvt(ffi::SSL_CTX_set_extension_permutation(
+            cvt(ffi::SSL_CTX_set_extension_order(
                 self.as_ptr(),
                 indices.as_ptr() as *const _,
                 indices.len() as _,
