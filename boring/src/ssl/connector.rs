@@ -287,7 +287,7 @@ impl ConnectConfiguration {
         unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
-   /// Sets whether the aes chacha20 preference should be enabled.
+    /// Sets whether the aes chacha20 preference should be enabled.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_set_prefer_chacha20)]
     pub fn set_prefer_chacha20(&mut self, enable: bool) {

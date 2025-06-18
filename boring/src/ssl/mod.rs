@@ -1927,6 +1927,7 @@ impl SslContextBuilder {
         &mut self,
         indices: &[ExtensionType],
     ) -> Result<(), ErrorStack> {
+        let indices = indices.iter().map(|ext| ext.0).collect::<Vec<u16>>();
         unsafe {
             cvt(ffi::SSL_CTX_set_extension_order(
                 self.as_ptr(),
