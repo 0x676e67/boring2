@@ -1909,6 +1909,13 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
+    /// Sets whether the aes chacha20 preference should be enabled.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_CTX_set_prefer_chacha20)]
+    pub fn set_prefer_chacha20(&mut self, enable: bool) {
+        unsafe { ffi::SSL_CTX_set_prefer_chacha20(self.as_ptr(), enable as _) }
+    }
+
     /// Sets the indices of the extensions to be permuted.
     ///
     /// The indices must be in the range [0, 25).
