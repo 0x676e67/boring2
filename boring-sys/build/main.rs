@@ -651,6 +651,7 @@ fn get_cpp_runtime_lib(config: &Config) -> Option<String> {
     if env::var_os("CARGO_CFG_UNIX").is_some() {
         match env::var("CARGO_CFG_TARGET_OS").unwrap().as_ref() {
             "macos" | "ios" => Some("c++".into()),
+            "freebsd" => Some("c++".into()),
             _ => Some("stdc++".into()),
         }
     } else {
