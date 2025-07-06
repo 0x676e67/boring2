@@ -533,7 +533,7 @@ impl SelectCertError {
 /// ExtensionType that is not defined by the impl. `From` will be deprecated in favor of `TryFrom`
 /// in the next major bump of the library.
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ExtensionType(u16);
 
 impl ExtensionType {
@@ -581,7 +581,7 @@ impl From<u16> for ExtensionType {
 }
 
 /// An SSL/TLS protocol version.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct SslVersion(u16);
 
 impl SslVersion {
@@ -836,7 +836,7 @@ impl CompliancePolicy {
 }
 
 // IANA assigned identifier of compression algorithm. See https://www.rfc-editor.org/rfc/rfc8879.html#name-compression-algorithms
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CertificateCompressionAlgorithm(u16);
 
 impl CertificateCompressionAlgorithm {
