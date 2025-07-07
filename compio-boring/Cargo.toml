@@ -38,9 +38,9 @@ pq-experimental = ["boring/pq-experimental"]
 boring = { workspace = true }
 boring-sys = { workspace = true }
 compio = { workspace = true }
-compio-io = "0.6.0"
+compio-io = { workspace = true, features = ["compat"]}
 
 [dev-dependencies]
 futures = { workspace = true }
-tokio = { workspace = true, features = [ "full" ] }
+compio = { workspace = true, features = [ "macros"] }
 anyhow = { workspace = true }
