@@ -266,14 +266,6 @@ impl ConnectConfiguration {
 
 impl ConnectConfiguration {
     /// Enables or disables ECH grease.
-    ///
-    /// # Arguments
-    ///
-    /// * `enable` - A boolean indicating whether to enable ECH grease.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it calls an FFI function.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_set_enable_ech_grease)]
     pub fn set_enable_ech_grease(&mut self, enable: bool) {
@@ -287,19 +279,18 @@ impl ConnectConfiguration {
         unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
-    /// Adds application settings.
+    /// Sets whether the ChaCha20 preference should be enabled.
     ///
-    /// # Arguments
-    ///
-    /// * `alps` - A slice of bytes representing the application settings.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<(), ErrorStack>` - Returns `Ok(())` if the operation is successful, otherwise returns an `ErrorStack`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it calls an FFI function.
+    /// Controls the priority of TLS 1.3 cipher suites. When set to `true`, the client prefers:
+    /// AES_128_GCM, CHACHA20_POLY1305, then AES_256_GCM. Useful in environments with specific
+    /// encryption requirements.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_set_prefer_chacha20)]
+    pub fn set_prefer_chacha20(&mut self, enable: bool) {
+        unsafe { ffi::SSL_set_prefer_chacha20(self.as_ptr(), enable as _) }
+    }
+
+    /// Sets application settings flag for ALPS (Application-Layer Protocol Negotiation).
     #[corresponds(SSL_add_application_settings)]
     pub fn add_application_settings(&mut self, alps: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
@@ -315,32 +306,12 @@ impl ConnectConfiguration {
     }
 
     /// Sets the ALPS use new codepoint flag.
-    ///
-    /// # Arguments
-    ///
-    /// * `use_new` - A boolean indicating whether to use the new codepoint.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it calls an FFI function.
     #[corresponds(SSL_set_alps_use_new_codepoint)]
     pub fn set_alps_use_new_codepoint(&mut self, use_new: bool) {
         unsafe { ffi::SSL_set_alps_use_new_codepoint(self.as_ptr(), use_new as _) }
     }
 
     /// Sets the SSL options.
-    ///
-    /// # Arguments
-    ///
-    /// * `options` - An `SslOptions` bitmask representing the options to set.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<(), ErrorStack>` - Returns `Ok(())` if the operation is successful, otherwise returns an `ErrorStack`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe because it calls an FFI function.
     #[corresponds(SSL_set_options)]
     pub fn set_options(&mut self, options: SslOptions) -> Result<(), ErrorStack> {
         unsafe { cvt(ffi::SSL_set_options(self.as_ptr(), options.bits()) as _).map(|_| ()) }

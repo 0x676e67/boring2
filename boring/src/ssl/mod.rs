@@ -103,12 +103,6 @@ pub use self::async_callbacks::{
     BoxCustomVerifyFuture, BoxGetSessionFinish, BoxGetSessionFuture, BoxPrivateKeyMethodFinish,
     BoxPrivateKeyMethodFuture, BoxSelectCertFinish, BoxSelectCertFuture, ExDataFuture,
 };
-#[deprecated(
-    since = "4.15.13",
-    note = "Use `boring2::ssl::CertificateCompressionAlgorithm` instead"
-)]
-#[cfg(feature = "cert-compression")]
-pub use self::cert_compression::CertCompressionAlgorithm;
 pub use self::connector::{
     ConnectConfiguration, SslAcceptor, SslAcceptorBuilder, SslConnector, SslConnectorBuilder,
 };
@@ -119,8 +113,6 @@ pub use self::error::{Error, ErrorCode, HandshakeError};
 mod async_callbacks;
 mod bio;
 mod callbacks;
-#[cfg(feature = "cert-compression")]
-mod cert_compression;
 mod connector;
 #[cfg(not(feature = "fips"))]
 mod ech;
@@ -540,7 +532,8 @@ impl SelectCertError {
 /// **WARNING**: The current implementation of `From` is unsound, as it's possible to create an
 /// ExtensionType that is not defined by the impl. `From` will be deprecated in favor of `TryFrom`
 /// in the next major bump of the library.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct ExtensionType(u16);
 
 impl ExtensionType {
@@ -579,50 +572,6 @@ impl ExtensionType {
     pub const NEXT_PROTO_NEG: Self = Self(ffi::TLSEXT_TYPE_next_proto_neg as u16);
     pub const CHANNEL_ID: Self = Self(ffi::TLSEXT_TYPE_channel_id as u16);
     pub const RECORD_SIZE_LIMIT: Self = Self(ffi::TLSEXT_TYPE_record_size_limit as u16);
-
-    /// The permutation of extension types used by BoringSSL.
-    pub const BORING_SSLEXTENSION_PERMUTATION: &[ExtensionType] = &[
-        ExtensionType::SERVER_NAME,
-        ExtensionType::ENCRYPTED_CLIENT_HELLO,
-        ExtensionType::EXTENDED_MASTER_SECRET,
-        ExtensionType::RENEGOTIATE,
-        ExtensionType::SUPPORTED_GROUPS,
-        ExtensionType::EC_POINT_FORMATS,
-        ExtensionType::SESSION_TICKET,
-        ExtensionType::APPLICATION_LAYER_PROTOCOL_NEGOTIATION,
-        ExtensionType::STATUS_REQUEST,
-        ExtensionType::SIGNATURE_ALGORITHMS,
-        ExtensionType::NEXT_PROTO_NEG,
-        ExtensionType::CERTIFICATE_TIMESTAMP,
-        ExtensionType::CHANNEL_ID,
-        ExtensionType::SRTP,
-        ExtensionType::KEY_SHARE,
-        ExtensionType::PSK_KEY_EXCHANGE_MODES,
-        ExtensionType::EARLY_DATA,
-        ExtensionType::SUPPORTED_VERSIONS,
-        ExtensionType::COOKIE,
-        ExtensionType::QUIC_TRANSPORT_PARAMETERS_STANDARD,
-        ExtensionType::QUIC_TRANSPORT_PARAMETERS_LEGACY,
-        ExtensionType::CERT_COMPRESSION,
-        ExtensionType::DELEGATED_CREDENTIAL,
-        ExtensionType::APPLICATION_SETTINGS,
-        ExtensionType::APPLICATION_SETTINGS_NEW,
-        ExtensionType::RECORD_SIZE_LIMIT,
-    ];
-
-    /// Returns the index of the given extension type in the permutation.
-    pub const fn index_of(value: ExtensionType) -> Option<usize> {
-        let mut i = 0;
-        while i < Self::BORING_SSLEXTENSION_PERMUTATION.len() {
-            if i < Self::BORING_SSLEXTENSION_PERMUTATION.len()
-                && Self::BORING_SSLEXTENSION_PERMUTATION[i].0 == value.0
-            {
-                return Some(i);
-            }
-            i += 1;
-        }
-        None
-    }
 }
 
 impl From<u16> for ExtensionType {
@@ -632,7 +581,7 @@ impl From<u16> for ExtensionType {
 }
 
 /// An SSL/TLS protocol version.
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct SslVersion(u16);
 
 impl SslVersion {
@@ -887,7 +836,7 @@ impl CompliancePolicy {
 }
 
 // IANA assigned identifier of compression algorithm. See https://www.rfc-editor.org/rfc/rfc8879.html#name-compression-algorithms
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CertificateCompressionAlgorithm(u16);
 
 impl CertificateCompressionAlgorithm {
@@ -1198,20 +1147,6 @@ impl SslContextBuilder {
         }
     }
 
-    /// Sets a custom certificate store for verifying peer certificates.
-    #[deprecated(since = "4.15.13", note = "Use `set_verify_cert_store` instead.")]
-    #[corresponds(SSL_CTX_set1_verify_cert_store)]
-    pub fn set_verify_cert_store_ref(
-        &mut self,
-        cert_store: &'static X509Store,
-    ) -> Result<(), ErrorStack> {
-        unsafe {
-            cvt(ffi::SSL_CTX_set1_verify_cert_store(self.as_ptr(), cert_store.as_ptr()) as c_int)?;
-
-            Ok(())
-        }
-    }
-
     /// Use [`set_cert_store_builder`] or [`set_cert_store_ref`] instead.
     ///
     /// Replaces the context's certificate store.
@@ -1433,28 +1368,6 @@ impl SslContextBuilder {
         T: HasPrivate,
     {
         unsafe { cvt(ffi::SSL_CTX_use_PrivateKey(self.as_ptr(), key.as_ptr())).map(|_| ()) }
-    }
-
-    /// Sets whether a certificate compression algorithm should be used.
-    #[deprecated(
-        since = "4.15.13",
-        note = "Use `add_certificate_compression_algorithm` instead."
-    )]
-    #[cfg(feature = "cert-compression")]
-    #[corresponds(SSL_CTX_add_cert_compression_alg)]
-    pub fn add_cert_compression_alg(
-        &mut self,
-        alg: CertCompressionAlgorithm,
-    ) -> Result<(), ErrorStack> {
-        unsafe {
-            cvt(ffi::SSL_CTX_add_cert_compression_alg(
-                self.as_ptr(),
-                alg as _,
-                alg.compression_fn(),
-                alg.decompression_fn(),
-            ))
-            .map(|_| ())
-        }
     }
 
     /// Sets the list of supported ciphers for protocols before TLSv1.3.
@@ -1997,52 +1910,26 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
-    /// Sets whether the context should enable there key share extension.
-    #[deprecated(since = "4.13.8", note = "use `set_key_shares_limit` instead")]
-    #[corresponds(SSL_CTX_set_key_shares_limit)]
-    pub fn set_key_shares_length_limit(&mut self, limit: u8) {
-        self.set_key_shares_limit(limit)
+    /// Sets whether the ChaCha20 preference should be enabled.
+    ///
+    /// Controls the priority of TLS 1.3 cipher suites. When set to `true`, the client prefers:
+    /// AES_128_GCM, CHACHA20_POLY1305, then AES_256_GCM. Useful in environments with specific
+    /// encryption requirements.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_CTX_set_prefer_chacha20)]
+    pub fn set_prefer_chacha20(&mut self, enable: bool) {
+        unsafe { ffi::SSL_CTX_set_prefer_chacha20(self.as_ptr(), enable as _) }
     }
 
     /// Sets the indices of the extensions to be permuted.
-    ///
-    /// The indices must be in the range [0, 25).
-    /// Extension duplication will be verified by the user.
-    /// If duplication occurs, TLS connection failure may occur.
-    #[corresponds(SSL_CTX_set_extension_permutation)]
+    #[corresponds(SSL_CTX_set_extension_order)]
     #[cfg(not(feature = "fips-compat"))]
     pub fn set_extension_permutation(
         &mut self,
-        shuffled: &[ExtensionType],
+        indices: &[ExtensionType],
     ) -> Result<(), ErrorStack> {
-        let mut indices = Vec::with_capacity(shuffled.len().div_ceil(2));
-        for &ext in shuffled {
-            if let Some(index) = ExtensionType::index_of(ext) {
-                indices.push(index as u8);
-            }
-        }
-
         unsafe {
-            cvt(ffi::SSL_CTX_set_extension_permutation(
-                self.as_ptr(),
-                indices.as_ptr() as *const _,
-                indices.len() as _,
-            ))
-            .map(|_| ())
-        }
-    }
-
-    /// Sets the indices of the extensions to be permuted.
-    ///
-    /// The indices must be in the range [0, 25).
-    /// Extension duplication will be verified by the user.
-    /// If duplication occurs, TLS connection failure may occur.
-    #[deprecated(since = "4.15.13", note = "use `set_extension_permutation` instead")]
-    #[corresponds(SSL_CTX_set_extension_permutation)]
-    #[cfg(not(feature = "fips-compat"))]
-    pub fn set_extension_permutation_indices(&mut self, indices: &[u8]) -> Result<(), ErrorStack> {
-        unsafe {
-            cvt(ffi::SSL_CTX_set_extension_permutation(
+            cvt(ffi::SSL_CTX_set_extension_order(
                 self.as_ptr(),
                 indices.as_ptr() as *const _,
                 indices.len() as _,

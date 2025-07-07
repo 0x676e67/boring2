@@ -36,7 +36,6 @@ fn bootstrap_ech(config: &[u8], key: &[u8], list: &[u8]) -> (Server, ClientSslBu
 }
 
 #[test]
-#[ignore]
 fn ech() {
     let (_server, client) = bootstrap_ech(ECH_CONFIG, ECH_KEY, ECH_CONFIG_LIST);
 
