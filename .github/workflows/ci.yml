@@ -142,6 +142,7 @@ jobs:
           rust: stable
           os: ubuntu-latest
           apt_packages: gcc-multilib g++-multilib
+          extra_test_args: --workspace --exclude compio-boring2
         - thing: arm-linux
           target: arm-unknown-linux-gnueabi
           rust: stable
