@@ -128,7 +128,7 @@ impl<S> SslStream<S> {
     /// Returns a shared reference to the underlying stream.
     #[must_use]
     pub fn get_ref(&self) -> &S {
-        &self.0.get_ref().get_ref()
+        self.0.get_ref().get_ref()
     }
 
     /// Returns a mutable reference to the underlying stream.
