@@ -1,4 +1,4 @@
-use crate::error::{Error, Result, map_result};
+use crate::error::{map_result, Error, Result};
 use boring::hash::MessageDigest;
 use boring_sys as bffi;
 use bytes::{BufMut, BytesMut};
