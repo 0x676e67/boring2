@@ -4,6 +4,7 @@ members = [
     "boring-sys",
     "tokio-boring",
     "compio-boring",
+    "quinn-boring",
 ]
 resolver = "2"
 
