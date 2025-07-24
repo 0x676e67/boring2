@@ -101,21 +101,25 @@ jobs:
           rust: stable
           os: ubuntu-latest
           check_only: true
+          extra_test_args: --workspace --exclude quinn-boring2
         - thing: arm64-android
           target: aarch64-linux-android
           rust: stable
           os: ubuntu-latest
           check_only: true
+          extra_test_args: --workspace --exclude quinn-boring2
         - thing: i686-android
           target: i686-linux-android
           rust: stable
           os: ubuntu-latest
           check_only: true
+          extra_test_args: --workspace --exclude quinn-boring2
         - thing: x86_64-android
           target: x86_64-linux-android
           rust: stable
           os: ubuntu-latest
           check_only: true
+          extra_test_args: --workspace --exclude quinn-boring2
         - thing: aarch64-ios
           target: aarch64-apple-ios
           os: macos-latest
