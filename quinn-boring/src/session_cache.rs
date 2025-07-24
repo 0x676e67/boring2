@@ -70,8 +70,7 @@ impl Entry {
         let mut encoded_params = encoded.split_to(len);
         let params = TransportParameters::read(Side::Client, &mut encoded_params).map_err(|e| {
             Error::invalid_input(format!(
-                "failed parsing cached transport parameters: {:?}",
-                e
+                "failed parsing cached transport parameters: {e:?}"
             ))
         })?;
 

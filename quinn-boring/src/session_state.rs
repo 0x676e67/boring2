@@ -139,7 +139,7 @@ impl SessionState {
                     .map_err(|e| TransportError {
                         code: Alert::handshake_failure().into(),
                         frame: None,
-                        reason: format!("failed parsing transport params: {:?}", e),
+                        reason: format!("failed parsing transport params: {e:?}"),
                     })?;
                 Ok(Some(params))
             }
@@ -328,7 +328,7 @@ impl SessionState {
                     // Error occurred within the SSL library. Get details from the ErrorStack.
                     format!("{}: {:?}", ssl_err, ErrorStack::get())
                 } else {
-                    format!("{}", ssl_err)
+                    format!("{ssl_err}")
                 };
 
                 let mut err: TransportError = Alert::handshake_failure().into();
@@ -387,8 +387,7 @@ impl SessionState {
     fn on_add_handshake_data(&mut self, level: Level, data: &[u8]) -> Result<()> {
         if level < self.write_level {
             return Err(Error::other(format!(
-                "add_handshake_data for previous write level {:?}",
-                level
+                "add_handshake_data for previous write level {level:?}"
             )));
         }
 
@@ -396,8 +395,7 @@ impl SessionState {
         let state = self.level_state_mut(level);
         if state.write_buffer.len() + data.len() > state.write_buffer.capacity() {
             return Err(Error::other(format!(
-                "add_handshake_data exceeded buffer capacity for level {:?}",
-                level
+                "add_handshake_data exceeded buffer capacity for level {level:?}"
             )));
         }
 

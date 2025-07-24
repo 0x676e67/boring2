@@ -99,7 +99,7 @@ impl CipherSuite {
             bffi::TLS1_CK_AES_128_GCM_SHA256 => Ok(Self::aes128_gcm_sha256()),
             bffi::TLS1_CK_AES_256_GCM_SHA384 => Ok(Self::aes256_gcm_sha384()),
             bffi::TLS1_CK_CHACHA20_POLY1305_SHA256 => Ok(Self::chacha20_poly1305_sha256()),
-            id => Err(Error::invalid_input(format!("invalid cipher id: {}", id))),
+            id => Err(Error::invalid_input(format!("invalid cipher id: {id}"))),
         }
     }
 }

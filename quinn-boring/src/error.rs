@@ -48,7 +48,7 @@ impl Error {
     }
 
     pub(crate) fn other(msg: String) -> Self {
-        Error::IoError(io::Error::new(ErrorKind::Other, msg))
+        Error::IoError(io::Error::other(msg))
     }
 }
 

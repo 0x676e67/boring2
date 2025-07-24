@@ -319,6 +319,8 @@ jobs:
           sleep 10
           echo "===  Publishing compio-boring2... ==="
           (cd compio-boring && cargo publish)
+          echo "===  Publishing quinn-boring2... ==="
+          (cd quinn-boring && cargo publish)
 
       - name: Upload binaries to GitHub Release
         uses: softprops/action-gh-release@v2
