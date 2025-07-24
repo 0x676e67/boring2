@@ -47,9 +47,7 @@ impl crypto::HmacKey for HmacKey {
 
         // Verify the signature length.
         if out_len as usize != self.signature_len() {
-            panic!(
-                "HMAC.sign: generated signature with unexpected length: {out_len}"
-            );
+            panic!("HMAC.sign: generated signature with unexpected length: {out_len}");
         }
     }
 
