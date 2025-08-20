@@ -1,3 +1,4 @@
+#![allow(unused)]
 mod aead;
 mod alert;
 mod alpn;

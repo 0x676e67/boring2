@@ -192,14 +192,14 @@ impl<T: Stackable> StackRef<T> {
     }
 
     #[must_use]
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&'_ self) -> Iter<'_, T> {
         Iter {
             stack: self,
             idxs: 0..self.len(),
         }
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut(&'_ mut self) -> IterMut<'_, T> {
         IterMut {
             idxs: 0..self.len(),
             stack: self,
