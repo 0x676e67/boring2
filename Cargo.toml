@@ -44,4 +44,4 @@ openssl-macros = "0.1.1"
 autocfg = "1.3.0"
 brotli = "8"
 compio = { version = "0.15.0" }
-compio-io = { version = "0.7.0" }
+compio-io = { version = "0.8.0" }
