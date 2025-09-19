@@ -4336,7 +4336,7 @@ index 4dd8841b1..01b19c7a3 100644
  #if defined(__cplusplus)
  } /* extern C */
 diff --git a/src/include/openssl/ssl.h b/src/include/openssl/ssl.h
-index 53aa9b453..446e0f539 100644
+index 53aa9b453..32465017d 100644
 --- a/src/include/openssl/ssl.h
 +++ b/src/include/openssl/ssl.h
 @@ -718,6 +718,12 @@ OPENSSL_EXPORT int SSL_version(const SSL *ssl);
@@ -4377,7 +4377,7 @@ index 53aa9b453..446e0f539 100644
  
  // Certificate compression.
  //
-@@ -4570,6 +4587,51 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
+@@ -4570,6 +4587,61 @@ OPENSSL_EXPORT void SSL_CTX_set_permute_extensions(SSL_CTX *ctx, int enabled);
  // permute extensions. For now, this is only implemented for the ClientHello.
  OPENSSL_EXPORT void SSL_set_permute_extensions(SSL *ssl, int enabled);
  
@@ -4396,11 +4396,11 @@ index 53aa9b453..446e0f539 100644
 +OPENSSL_EXPORT void SSL_CTX_set_record_size_limit(SSL_CTX *ctx, uint16_t limit);
 +
 +// SSL_set_key_shares_limit configures whether sockets on |ssl| should
-+// send three key shares.
++// send key shares limit.
 +OPENSSL_EXPORT void SSL_set_key_shares_limit(SSL *ssl, uint8_t limit);
 +
 +// SSL_CTX_set_key_shares_limit configures whether sockets on |ctx| should
-+// send three key shares.
++// send key shares limit.
 +OPENSSL_EXPORT void SSL_CTX_set_key_shares_limit(SSL_CTX *ctx, uint8_t limit);
 +
 +
@@ -4415,21 +4415,31 @@ index 53aa9b453..446e0f539 100644
 +// |SSL_CTX_set_aes_override| but only configures a single |SSL*|.
 +OPENSSL_EXPORT void SSL_set_aes_hw_override(SSL *ssl, int override_value);
 +
-+// SSL_CTX_set_prefer_chacha20 configures whether sockets on |ctx| should prefer
-+// the ChaCha20 cipher suite over AES. This is only relevant for TLS 1.3 and
-+// later, where ChaCha20 is not the default cipher suite.
-+OPENSSL_EXPORT void SSL_CTX_set_prefer_chacha20(SSL_CTX *ctx,
-+                                                  int prefer_chacha20);
++// SSL_CTX_set_preserve_tls13_cipher_list configures whether sockets on |ctx| should
++// preserve the TLS 1.3 cipher list order, retaining the original cipher suite
++// preferences. When enabled, it may prefer ChaCha20 over AES based on the
++// configured list. This is only relevant for TLS 1.3 and later, where ChaCha20
++// is not the default cipher suite.
++//
++// Note: This function must be called before |SSL_CTX_set_cipher_list| to take
++// effect.
++OPENSSL_EXPORT void SSL_CTX_set_preserve_tls13_cipher_list(SSL_CTX *ctx,
++                                                  int preserve_tls13_cipher_list);
 +
-+// SSL_set_prefer_chacha20 configures whether sockets on |ssl| should prefer
-+// the ChaCha20 cipher suite over AES. This is only relevant for TLS 1.3 and
-+// later, where ChaCha20 is not the default cipher suite.
-+OPENSSL_EXPORT void SSL_set_prefer_chacha20(SSL *ssl, int prefer_chacha20);
++// SSL_set_preserve_tls13_cipher_list configures whether sockets on |ctx| should
++// preserve the TLS 1.3 cipher list order, retaining the original cipher suite
++// preferences. When enabled, it may prefer ChaCha20 over AES based on the
++// configured list. This is only relevant for TLS 1.3 and later, where ChaCha20
++// is not the default cipher suite.
++//
++// Note: This function must be called before |SSL_set_cipher_list| to take
++// effect.
++OPENSSL_EXPORT void SSL_set_preserve_tls13_cipher_list(SSL *ssl, int preserve_tls13_cipher_list);
 +
  // SSL_max_seal_overhead returns the maximum overhead, in bytes, of sealing a
  // record with |ssl|.
  OPENSSL_EXPORT size_t SSL_max_seal_overhead(const SSL *ssl);
-@@ -4874,6 +4936,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
+@@ -4874,6 +4946,10 @@ OPENSSL_EXPORT int SSL_CTX_set1_sigalgs_list(SSL_CTX *ctx, const char *str);
  // more convenient to codesearch for specific algorithm values.
  OPENSSL_EXPORT int SSL_set1_sigalgs_list(SSL *ssl, const char *str);
  
@@ -4440,7 +4450,7 @@ index 53aa9b453..446e0f539 100644
  #define SSL_set_app_data(s, arg) (SSL_set_ex_data(s, 0, (char *)(arg)))
  #define SSL_get_app_data(s) (SSL_get_ex_data(s, 0))
  #define SSL_SESSION_set_app_data(s, a) \
-@@ -4926,7 +4992,6 @@ DEFINE_STACK_OF(SSL_COMP)
+@@ -4926,7 +5002,6 @@ DEFINE_STACK_OF(SSL_COMP)
  #define SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG 0
  #define SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG 0
  #define SSL_OP_NO_COMPRESSION 0
@@ -4448,7 +4458,7 @@ index 53aa9b453..446e0f539 100644
  #define SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION 0
  #define SSL_OP_NO_SSLv2 0
  #define SSL_OP_NO_SSLv3 0
-@@ -5779,6 +5844,7 @@ BSSL_NAMESPACE_END
+@@ -5779,6 +5854,7 @@ BSSL_NAMESPACE_END
  #define SSL_R_ECH_REJECTED 319
  #define SSL_R_INVALID_OUTER_EXTENSION 320
  #define SSL_R_INCONSISTENT_ECH_NEGOTIATION 321
@@ -5089,7 +5099,7 @@ index 6e5cc2da1..b1b31f3a7 100644
          ticket_age_skew < std::numeric_limits<int32_t>::min()) {
        return false;
 diff --git a/src/ssl/handshake_client.cc b/src/ssl/handshake_client.cc
-index 971ebd0b1..c34c7c677 100644
+index 971ebd0b1..063ca4b4c 100644
 --- a/src/ssl/handshake_client.cc
 +++ b/src/ssl/handshake_client.cc
 @@ -158,6 +158,8 @@
@@ -5122,15 +5132,15 @@ index 971ebd0b1..c34c7c677 100644
 -                               TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
 -                               ssl->config->tls13_cipher_policy))) {
 -      return false;
-+    if (ssl->config->prefer_chacha20) {
-+      if (!ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_128_GCM_SHA256 & 0xffff,
-+                                ssl->config->tls13_cipher_policy) ||
-+          !ssl_add_tls13_cipher(&child,
-+                                TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
-+                                ssl->config->tls13_cipher_policy) ||
-+          !ssl_add_tls13_cipher(&child, TLS1_3_CK_AES_256_GCM_SHA384 & 0xffff,
-+                                ssl->config->tls13_cipher_policy)) {
-+        return false;
++  if (ssl->config->preserve_tls13_cipher_list &&
++      ssl->ctx->tls13_cipher_list != nullptr &&
++      sk_SSL_CIPHER_num(ssl->ctx->tls13_cipher_list->ciphers.get()) == 3) {
++       for (size_t i = 0; i < sk_SSL_CIPHER_num(ssl->ctx->tls13_cipher_list->ciphers.get()); i++) {
++        const SSL_CIPHER *cipher = sk_SSL_CIPHER_value(ssl->ctx->tls13_cipher_list->ciphers.get(), i);
++        uint16_t cipher_id = SSL_CIPHER_get_protocol_id(cipher);
++        if (!ssl_add_tls13_cipher(&child, cipher_id, ssl->config->tls13_cipher_policy)) {
++          return false;
++        }
 +      }
 +    } else {
 +      const bool has_aes_hw = ssl->config->aes_hw_override
@@ -5251,7 +5261,7 @@ index 971ebd0b1..c34c7c677 100644
      CBB child;
      if (!CBB_add_u8_length_prefixed(&body, &child)) {
 diff --git a/src/ssl/internal.h b/src/ssl/internal.h
-index 1e6da2153..2025dcae0 100644
+index 1e6da2153..940cc6c29 100644
 --- a/src/ssl/internal.h
 +++ b/src/ssl/internal.h
 @@ -323,6 +323,19 @@ class Array {
@@ -5332,7 +5342,20 @@ index 1e6da2153..2025dcae0 100644
  
  // Bits for |algorithm_prf| (handshake digest).
  #define SSL_HANDSHAKE_MAC_DEFAULT 0x1
-@@ -1818,7 +1858,7 @@ struct SSL_HANDSHAKE {
+@@ -639,6 +679,12 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+                             const bool has_aes_hw, const char *rule_str,
+                             bool strict);
+ 
++// ssl_create_tls13_cipher_list is like |ssl_create_cipher_list| but only
++// supports TLS 1.3 cipher suites.
++bool ssl_create_preserve_tls13_cipher_list(
++    UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
++    const char *rule_str, bool strict);
++
+ // ssl_cipher_auth_mask_for_key returns the mask of cipher |algorithm_auth|
+ // values suitable for use with |key| in TLS 1.2 and below.
+ uint32_t ssl_cipher_auth_mask_for_key(const EVP_PKEY *key);
+@@ -1818,7 +1864,7 @@ struct SSL_HANDSHAKE {
    // key_shares are the current key exchange instances. The second is only used
    // as a client if we believe that we should offer two key shares in a
    // ClientHello.
@@ -5341,7 +5364,7 @@ index 1e6da2153..2025dcae0 100644
  
    // transcript is the current handshake transcript.
    SSLTranscript transcript;
-@@ -1874,6 +1914,9 @@ struct SSL_HANDSHAKE {
+@@ -1874,6 +1920,9 @@ struct SSL_HANDSHAKE {
    // supports with delegated credentials.
    Array<uint16_t> peer_delegated_credential_sigalgs;
  
@@ -5351,7 +5374,7 @@ index 1e6da2153..2025dcae0 100644
    // peer_key is the peer's ECDH key for a TLS 1.2 client.
    Array<uint8_t> peer_key;
  
-@@ -2132,6 +2175,10 @@ bool tls13_process_new_session_ticket(SSL *ssl, const SSLMessage &msg);
+@@ -2132,6 +2181,10 @@ bool tls13_process_new_session_ticket(SSL *ssl, const SSLMessage &msg);
  bssl::UniquePtr<SSL_SESSION> tls13_create_session_with_ticket(SSL *ssl,
                                                                CBS *body);
  
@@ -5362,7 +5385,7 @@ index 1e6da2153..2025dcae0 100644
  // ssl_setup_extension_permutation computes a ClientHello extension permutation
  // for |hs|, if applicable. It returns true on success and false on error.
  bool ssl_setup_extension_permutation(SSL_HANDSHAKE *hs);
-@@ -3058,6 +3105,10 @@ struct SSL_CONFIG {
+@@ -3058,6 +3111,10 @@ struct SSL_CONFIG {
    // verify_sigalgs, if not empty, is the set of signature algorithms
    // accepted from the peer in decreasing order of preference.
    Array<uint16_t> verify_sigalgs;
@@ -5373,7 +5396,7 @@ index 1e6da2153..2025dcae0 100644
  
    // srtp_profiles is the list of configured SRTP protection profiles for
    // DTLS-SRTP.
-@@ -3128,6 +3179,20 @@ struct SSL_CONFIG {
+@@ -3128,6 +3185,21 @@ struct SSL_CONFIG {
    // of support for AES hw. The value is only considered if |aes_hw_override| is
    // true.
    bool aes_hw_override_value : 1;
@@ -5388,13 +5411,14 @@ index 1e6da2153..2025dcae0 100644
 +  // key_shares_limit is the maximum number of key shares to send.
 +  uint8_t key_shares_limit = 0;
 +
-+  // prefer_chacha20 indicates that ChaCha20-Poly1305 ciphers should be
-+  // preferred over AES-GCM ciphers. It is only effective on the client side.
-+  bool prefer_chacha20 : 1;
++  // preserve_tls13_cipher_list indicates that the TLS 1.3 cipher list order should
++  // be preserved, potentially preferring ChaCha20-Poly1305 over AES-GCM ciphers.
++  // It is only effective on the client side.
++  bool preserve_tls13_cipher_list : 1;
  };
  
  // From RFC 8446, used in determining PSK modes.
-@@ -3696,6 +3761,10 @@ struct ssl_ctx_st {
+@@ -3696,6 +3768,10 @@ struct ssl_ctx_st {
    // accepted from the peer in decreasing order of preference.
    bssl::Array<uint16_t> verify_sigalgs;
  
@@ -5405,7 +5429,7 @@ index 1e6da2153..2025dcae0 100644
    // retain_only_sha256_of_client_certs is true if we should compute the SHA256
    // hash of the peer's certificate and then discard it to save memory and
    // session space. Only effective on the server side.
-@@ -3723,6 +3792,10 @@ struct ssl_ctx_st {
+@@ -3723,6 +3799,10 @@ struct ssl_ctx_st {
    // permute_extensions is whether to permute extensions when sending messages.
    bool permute_extensions : 1;
  
@@ -5416,7 +5440,7 @@ index 1e6da2153..2025dcae0 100644
    // allow_unknown_alpn_protos is whether the client allows unsolicited ALPN
    // protocols from the peer.
    bool allow_unknown_alpn_protos : 1;
-@@ -3748,6 +3821,16 @@ struct ssl_ctx_st {
+@@ -3748,6 +3828,20 @@ struct ssl_ctx_st {
    // |aes_hw_override| is true.
    bool aes_hw_override_value : 1;
  
@@ -5426,15 +5450,19 @@ index 1e6da2153..2025dcae0 100644
 +  // key_shares limit is the maximum number of key shares to send.
 +  uint8_t key_shares_limit = 0;
 +
-+  // prefer_chacha20 indicates that ChaCha20-Poly1305 ciphers should be
-+  // preferred over AES-GCM ciphers. It is only effective on the client side.
-+  bool prefer_chacha20 : 1;
++  // preserve_tls13_cipher_list indicates that the TLS 1.3 cipher list order should
++  // be preserved, potentially preferring ChaCha20-Poly1305 over AES-GCM ciphers.
++  // It is only effective on the client side.
++  bool preserve_tls13_cipher_list : 1;
++
++  // tls13_cipher_list, if non-null, is the list of ciphers to use in TLS 1.3
++  bssl::UniquePtr<bssl::SSLCipherPreferenceList> tls13_cipher_list;
 +
   private:
    ~ssl_ctx_st();
    friend OPENSSL_EXPORT void SSL_CTX_free(SSL_CTX *);
 diff --git a/src/ssl/ssl_cipher.cc b/src/ssl/ssl_cipher.cc
-index ebb075351..e272c4fed 100644
+index ebb075351..e203fb0a9 100644
 --- a/src/ssl/ssl_cipher.cc
 +++ b/src/ssl/ssl_cipher.cc
 @@ -175,26 +175,106 @@ static constexpr SSL_CIPHER kCiphers[] = {
@@ -5721,7 +5749,79 @@ index ebb075351..e272c4fed 100644
    } else {
      return false;
    }
-@@ -1152,13 +1344,20 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+@@ -1129,6 +1321,71 @@ static bool ssl_cipher_process_rulestr(const char *rule_str,
+   return true;
+ }
+ 
++bool ssl_create_preserve_tls13_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
++                                  const char *rule_str, bool strict) {
++  if (out_cipher_list == nullptr || rule_str == nullptr) {
++    return false;
++  }
++
++  // TLS 1.3-only ciphers.
++  static const uint16_t kAESTLS13OnlyCiphers[] = {
++      TLS1_3_CK_AES_128_GCM_SHA256 & 0xffff,
++      TLS1_3_CK_AES_256_GCM_SHA384 & 0xffff,
++      TLS1_3_CK_CHACHA20_POLY1305_SHA256 & 0xffff,
++  };
++
++  // Set up a linked list of ciphers.
++  CIPHER_ORDER co_list[OPENSSL_ARRAY_SIZE(kAESTLS13OnlyCiphers)];
++  for (size_t i = 0; i < OPENSSL_ARRAY_SIZE(co_list); i++) {
++    co_list[i].next = i + 1 < OPENSSL_ARRAY_SIZE(co_list) ? &co_list[i + 1] : nullptr;
++    co_list[i].prev = i == 0 ? nullptr : &co_list[i - 1];
++    co_list[i].active = false;  // Do not pre-activate
++    co_list[i].in_group = false;
++  }
++  CIPHER_ORDER *head = &co_list[0];
++  CIPHER_ORDER *tail = &co_list[OPENSSL_ARRAY_SIZE(co_list) - 1];
++
++  // Add TLS 1.3 ciphers to the list (but do not activate yet).
++  size_t num = 0;
++  for (uint16_t id : kAESTLS13OnlyCiphers) {
++    co_list[num++].cipher = SSL_get_cipher_by_value(id);
++    assert(co_list[num - 1].cipher != nullptr);
++    // Removed: co_list[num - 1].active = true;
++  }
++  assert(num == OPENSSL_ARRAY_SIZE(co_list));
++
++  // Apply rule_str to activate and order the ciphers.
++  if (!ssl_cipher_process_rulestr(rule_str, &head, &tail, strict)) {
++    return false;
++  }
++
++  // Allocate new "cipherstack" for the result.
++  UniquePtr<STACK_OF(SSL_CIPHER)> cipherstack(sk_SSL_CIPHER_new_null());
++  Array<bool> in_group_flags;
++  if (cipherstack == nullptr || !in_group_flags.Init(OPENSSL_ARRAY_SIZE(kAESTLS13OnlyCiphers))) {
++    return false;
++  }
++
++  // Add active ciphers to the stack in the order after applying rules.
++  size_t num_in_group_flags = 0;
++  for (CIPHER_ORDER *curr = head; curr != NULL; curr = curr->next) {
++    if (curr->active) {
++      if (!sk_SSL_CIPHER_push(cipherstack.get(), curr->cipher)) {
++        return false;
++      }
++      in_group_flags[num_in_group_flags++] = curr->in_group;
++    }
++  }
++
++  UniquePtr<SSLCipherPreferenceList> pref_list = MakeUnique<SSLCipherPreferenceList>();
++  if (!pref_list || !pref_list->Init(std::move(cipherstack), MakeConstSpan(in_group_flags).subspan(0, num_in_group_flags))) {
++    return false;
++  }
++
++  *out_cipher_list = std::move(pref_list);
++  return true;
++}
++
+ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+                             const bool has_aes_hw, const char *rule_str,
+                             bool strict) {
+@@ -1152,13 +1409,20 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
        TLS1_CK_ECDHE_PSK_WITH_CHACHA20_POLY1305_SHA256 & 0xffff,
    };
    static const uint16_t kLegacyCiphers[] = {
@@ -5742,7 +5842,7 @@ index ebb075351..e272c4fed 100644
        TLS1_CK_RSA_WITH_AES_128_GCM_SHA256 & 0xffff,
        TLS1_CK_RSA_WITH_AES_256_GCM_SHA384 & 0xffff,
        TLS1_CK_RSA_WITH_AES_128_SHA & 0xffff,
-@@ -1166,6 +1365,12 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
+@@ -1166,6 +1430,12 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
        TLS1_CK_RSA_WITH_AES_256_SHA & 0xffff,
        TLS1_CK_PSK_WITH_AES_256_CBC_SHA & 0xffff,
        SSL3_CK_RSA_DES_192_CBC3_SHA & 0xffff,
@@ -5755,7 +5855,7 @@ index ebb075351..e272c4fed 100644
    };
  
    // Set up a linked list of ciphers.
-@@ -1403,6 +1608,8 @@ int SSL_CIPHER_get_digest_nid(const SSL_CIPHER *cipher) {
+@@ -1403,6 +1673,8 @@ int SSL_CIPHER_get_digest_nid(const SSL_CIPHER *cipher) {
        return NID_sha1;
      case SSL_SHA256:
        return NID_sha256;
@@ -5764,7 +5864,7 @@ index ebb075351..e272c4fed 100644
    }
    assert(0);
    return NID_undef;
-@@ -1655,6 +1862,10 @@ const char *SSL_CIPHER_description(const SSL_CIPHER *cipher, char *buf,
+@@ -1655,6 +1927,10 @@ const char *SSL_CIPHER_description(const SSL_CIPHER *cipher, char *buf,
        mac = "SHA256";
        break;
  
@@ -6473,7 +6573,7 @@ index 09a9ad380..adf48cf71 100644
        return nullptr;
    }
 diff --git a/src/ssl/ssl_lib.cc b/src/ssl/ssl_lib.cc
-index 838761af5..2707f0150 100644
+index 838761af5..830ec8e42 100644
 --- a/src/ssl/ssl_lib.cc
 +++ b/src/ssl/ssl_lib.cc
 @@ -537,7 +537,9 @@ ssl_ctx_st::ssl_ctx_st(const SSL_METHOD *ssl_method)
@@ -6483,7 +6583,7 @@ index 838761af5..2707f0150 100644
 -      aes_hw_override_value(false) {
 +      aes_hw_override_value(false),
 +      key_shares_limit(0),
-+      prefer_chacha20(false) {
++      preserve_tls13_cipher_list(false) {
    CRYPTO_MUTEX_init(&lock);
    CRYPTO_new_ex_data(&ex_data);
  }
@@ -6492,7 +6592,7 @@ index 838761af5..2707f0150 100644
    ssl->config->aes_hw_override_value = ctx->aes_hw_override_value;
    ssl->config->tls13_cipher_policy = ctx->tls13_cipher_policy;
 +  ssl->config->key_shares_limit = ctx->key_shares_limit;
-+  ssl->config->prefer_chacha20 = ctx->prefer_chacha20;
++  ssl->config->preserve_tls13_cipher_list = ctx->preserve_tls13_cipher_list;
  
    if (!ssl->config->supported_group_list.CopyFrom(ctx->supported_group_list) ||
        !ssl->config->alpn_client_proto_list.CopyFrom(
@@ -6519,11 +6619,35 @@ index 838761af5..2707f0150 100644
 +      permute_extensions(false),
 +      key_shares_limit(0),
 +      alps_use_new_codepoint(false),
-+      prefer_chacha20(false) {
++      preserve_tls13_cipher_list(false) {
    assert(ssl);
  }
  
-@@ -2134,6 +2143,62 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
+@@ -2041,6 +2050,11 @@ const char *SSL_get_cipher_list(const SSL *ssl, int n) {
+ int SSL_CTX_set_cipher_list(SSL_CTX *ctx, const char *str) {
+   const bool has_aes_hw = ctx->aes_hw_override ? ctx->aes_hw_override_value
+                                                : EVP_has_aes_hardware();
++
++  if (ctx->preserve_tls13_cipher_list) {
++    ssl_create_preserve_tls13_cipher_list(&ctx->tls13_cipher_list, str, false /* not strict */);
++  }
++
+   return ssl_create_cipher_list(&ctx->cipher_list, has_aes_hw, str,
+                                 false /* not strict */);
+ }
+@@ -2048,6 +2062,11 @@ int SSL_CTX_set_cipher_list(SSL_CTX *ctx, const char *str) {
+ int SSL_CTX_set_strict_cipher_list(SSL_CTX *ctx, const char *str) {
+   const bool has_aes_hw = ctx->aes_hw_override ? ctx->aes_hw_override_value
+                                                : EVP_has_aes_hardware();
++
++  if (ctx->preserve_tls13_cipher_list) {
++    ssl_create_preserve_tls13_cipher_list(&ctx->tls13_cipher_list, str, true /* strict */);
++  }                                             
++                                               
+   return ssl_create_cipher_list(&ctx->cipher_list, has_aes_hw, str,
+                                 true /* strict */);
+ }
+@@ -2134,6 +2153,62 @@ void SSL_enable_ocsp_stapling(SSL *ssl) {
    ssl->config->ocsp_stapling_enabled = true;
  }
  
@@ -6567,26 +6691,26 @@ index 838761af5..2707f0150 100644
 +  ssl->config->aes_hw_override_value = !!override_value;
 +}
 +
-+void SSL_CTX_set_prefer_chacha20(SSL_CTX *ctx, int prefer_chacha20) {
++void SSL_CTX_set_preserve_tls13_cipher_list(SSL_CTX *ctx, int preserve_tls13_cipher_list) {
 +  if (!ctx) {
 +    return;
 +  }
 +  
-+  ctx->prefer_chacha20 = !!prefer_chacha20;
++  ctx->preserve_tls13_cipher_list = !!preserve_tls13_cipher_list;
 +}
 +
-+void SSL_set_prefer_chacha20(SSL *ssl, int prefer_chacha20) {
++void SSL_set_preserve_tls13_cipher_list(SSL *ssl, int preserve_tls13_cipher_list) {
 +  if (!ssl->config) {
 +    return;
 +  }
 +
-+  ssl->config->prefer_chacha20 = !!prefer_chacha20;
++  ssl->config->preserve_tls13_cipher_list = !!preserve_tls13_cipher_list;
 +}
 +
  void SSL_get0_signed_cert_timestamp_list(const SSL *ssl, const uint8_t **out,
                                           size_t *out_len) {
    SSL_SESSION *session = SSL_get_session(ssl);
-@@ -2327,6 +2392,13 @@ int SSL_has_application_settings(const SSL *ssl) {
+@@ -2327,6 +2402,13 @@ int SSL_has_application_settings(const SSL *ssl) {
    return session && session->has_application_settings;
  }
  
@@ -6600,7 +6724,7 @@ index 838761af5..2707f0150 100644
  int SSL_CTX_add_cert_compression_alg(SSL_CTX *ctx, uint16_t alg_id,
                                       ssl_cert_compression_func_t compress,
                                       ssl_cert_decompression_func_t decompress) {
-@@ -2939,6 +3011,21 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
+@@ -2939,6 +3021,21 @@ void SSL_set_permute_extensions(SSL *ssl, int enabled) {
    ssl->config->permute_extensions = !!enabled;
  }
  
@@ -6622,7 +6746,7 @@ index 838761af5..2707f0150 100644
  int32_t SSL_get_ticket_age_skew(const SSL *ssl) {
    return ssl->s3->ticket_age_skew;
  }
-@@ -3151,7 +3238,7 @@ namespace fips202205 {
+@@ -3151,7 +3248,7 @@ namespace fips202205 {
  // Section 3.3.1
  // "The server shall be configured to only use cipher suites that are
  // composed entirely of NIST approved algorithms"

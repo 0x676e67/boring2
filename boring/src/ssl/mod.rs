@@ -1910,15 +1910,30 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
+    /// Sets whether the preserve TLS 1.3 cipher list option should be enabled.
+    ///
+    /// This feature isn't available in the certified version of BoringSSL.
+    ///
+    /// # Note
+    ///
+    /// This method must be called before [`set_cipher_list`] to take effect.
+    /// If called after [`set_cipher_list`], the setting will be ignored.
+    #[cfg(not(feature = "fips"))]
+    #[corresponds(SSL_CTX_set_preserve_tls13_cipher_list)]
+    pub fn set_preserve_tls13_cipher_list(&mut self, enable: bool) {
+        unsafe { ffi::SSL_CTX_set_preserve_tls13_cipher_list(self.as_ptr(), enable as _) }
+    }
+
     /// Sets whether the ChaCha20 preference should be enabled.
     ///
     /// Controls the priority of TLS 1.3 cipher suites. When set to `true`, the client prefers:
     /// AES_128_GCM, CHACHA20_POLY1305, then AES_256_GCM. Useful in environments with specific
     /// encryption requirements.
+    #[deprecated(note = "use `set_preserve_tls13_cipher_list` instead")]
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_CTX_set_prefer_chacha20)]
     pub fn set_prefer_chacha20(&mut self, enable: bool) {
-        unsafe { ffi::SSL_CTX_set_prefer_chacha20(self.as_ptr(), enable as _) }
+        unsafe { ffi::SSL_CTX_set_preserve_tls13_cipher_list(self.as_ptr(), enable as _) }
     }
 
     /// Sets the indices of the extensions to be permuted.

@@ -279,17 +279,6 @@ impl ConnectConfiguration {
         unsafe { ffi::SSL_set_aes_hw_override(self.as_ptr(), enable as _) }
     }
 
-    /// Sets whether the ChaCha20 preference should be enabled.
-    ///
-    /// Controls the priority of TLS 1.3 cipher suites. When set to `true`, the client prefers:
-    /// AES_128_GCM, CHACHA20_POLY1305, then AES_256_GCM. Useful in environments with specific
-    /// encryption requirements.
-    #[cfg(not(feature = "fips"))]
-    #[corresponds(SSL_set_prefer_chacha20)]
-    pub fn set_prefer_chacha20(&mut self, enable: bool) {
-        unsafe { ffi::SSL_set_prefer_chacha20(self.as_ptr(), enable as _) }
-    }
-
     /// Sets application settings flag for ALPS (Application-Layer Protocol Negotiation).
     #[corresponds(SSL_add_application_settings)]
     pub fn add_application_settings(&mut self, alps: &[u8]) -> Result<(), ErrorStack> {
