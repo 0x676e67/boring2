@@ -5099,7 +5099,7 @@ index 6e5cc2da1..b1b31f3a7 100644
          ticket_age_skew < std::numeric_limits<int32_t>::min()) {
        return false;
 diff --git a/src/ssl/handshake_client.cc b/src/ssl/handshake_client.cc
-index 971ebd0b1..abcc9ef47 100644
+index 971ebd0b1..3ccda1a78 100644
 --- a/src/ssl/handshake_client.cc
 +++ b/src/ssl/handshake_client.cc
 @@ -158,6 +158,8 @@
@@ -5134,7 +5134,7 @@ index 971ebd0b1..abcc9ef47 100644
 -      return false;
 +  if (ssl->config->preserve_tls13_cipher_list &&
 +      ssl->ctx->tls13_cipher_list != NULL &&
-+      sk_SSL_CIPHER_num(ssl->ctx->tls13_cipher_list->ciphers.get()) == 3) {
++      sk_SSL_CIPHER_num(ssl->ctx->tls13_cipher_list->ciphers.get()) >= 1) {
 +       for (size_t i = 0; i < sk_SSL_CIPHER_num(ssl->ctx->tls13_cipher_list->ciphers.get()); i++) {
 +        const SSL_CIPHER *cipher = sk_SSL_CIPHER_value(ssl->ctx->tls13_cipher_list->ciphers.get(), i);
 +        uint16_t cipher_id = SSL_CIPHER_get_protocol_id(cipher);
