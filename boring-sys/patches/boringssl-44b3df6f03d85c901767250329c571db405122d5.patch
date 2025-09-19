@@ -5462,7 +5462,7 @@ index 1e6da2153..940cc6c29 100644
    ~ssl_ctx_st();
    friend OPENSSL_EXPORT void SSL_CTX_free(SSL_CTX *);
 diff --git a/src/ssl/ssl_cipher.cc b/src/ssl/ssl_cipher.cc
-index ebb075351..e203fb0a9 100644
+index ebb075351..20e3cbc61 100644
 --- a/src/ssl/ssl_cipher.cc
 +++ b/src/ssl/ssl_cipher.cc
 @@ -175,26 +175,106 @@ static constexpr SSL_CIPHER kCiphers[] = {
@@ -5755,7 +5755,7 @@ index ebb075351..e203fb0a9 100644
  
 +bool ssl_create_preserve_tls13_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
 +                                  const char *rule_str, bool strict) {
-+  if (out_cipher_list == nullptr || rule_str == nullptr) {
++  if (rule_str == NULL || out_cipher_list == NULL) {
 +    return false;
 +  }
 +
