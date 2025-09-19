@@ -1916,8 +1916,8 @@ impl SslContextBuilder {
     ///
     /// # Note
     ///
-    /// This method must be called before [`set_cipher_list`] to take effect.
-    /// If called after [`set_cipher_list`], the setting will be ignored.
+    /// This method must be called before [`Self::set_cipher_list`] to take effect.
+    /// If called after [`Self::set_cipher_list`], the setting will be ignored.
     #[cfg(not(feature = "fips"))]
     #[corresponds(SSL_CTX_set_preserve_tls13_cipher_list)]
     pub fn set_preserve_tls13_cipher_list(&mut self, enable: bool) {
