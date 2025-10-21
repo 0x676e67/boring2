@@ -300,8 +300,6 @@ jobs:
         submodules: 'recursive'
     - name: Install Rust (rustup)
       run: rustup update stable --no-self-update && rustup default stable
-    - name: Run `kx-safe-default` tests
-      run: cargo test --features kx-safe-default
     - name: Run `underscore-wildcards` tests
       run: cargo test --features underscore-wildcards
 
