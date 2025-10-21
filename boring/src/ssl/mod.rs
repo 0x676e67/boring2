@@ -1913,18 +1913,6 @@ impl SslContextBuilder {
         unsafe { ffi::SSL_CTX_set_preserve_tls13_cipher_list(self.as_ptr(), enable as _) }
     }
 
-    /// Sets whether the ChaCha20 preference should be enabled.
-    ///
-    /// Controls the priority of TLS 1.3 cipher suites. When set to `true`, the client prefers:
-    /// AES_128_GCM, CHACHA20_POLY1305, then AES_256_GCM. Useful in environments with specific
-    /// encryption requirements.
-    #[deprecated(note = "use `set_preserve_tls13_cipher_list` instead")]
-    #[cfg(not(feature = "fips"))]
-    #[corresponds(SSL_CTX_set_prefer_chacha20)]
-    pub fn set_prefer_chacha20(&mut self, enable: bool) {
-        unsafe { ffi::SSL_CTX_set_preserve_tls13_cipher_list(self.as_ptr(), enable as _) }
-    }
-
     /// Sets the indices of the extensions to be permuted.
     #[corresponds(SSL_CTX_set_extension_order)]
     pub fn set_extension_permutation(
