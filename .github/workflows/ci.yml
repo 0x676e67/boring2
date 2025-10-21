@@ -67,7 +67,7 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all --all-targets
       - name: Check docs
-        run: cargo doc --no-deps -p boring2 -p boring-sys2 --features pq-experimental,underscore-wildcards
+        run: cargo doc --no-deps -p boring2 -p boring-sys2 --features underscore-wildcards
         env:
           DOCS_RS: 1
   test:
