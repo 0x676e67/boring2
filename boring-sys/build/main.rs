@@ -303,7 +303,7 @@ fn get_boringssl_cmake_config(config: &Config) -> cmake::Config {
                     config
                         .manifest_dir
                         .join(src_path)
-                        .join("util/32-bit-toolchain.cmake")
+                        .join("src/util/32-bit-toolchain.cmake")
                         .as_os_str(),
                 );
             }
