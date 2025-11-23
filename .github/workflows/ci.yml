@@ -216,7 +216,7 @@ jobs:
       # shell: bash
     - run: rustup target add ${{ matrix.target }}
     - name: Install golang
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: '>=1.22.0'
     - name: Install target-specific APT dependencies
@@ -278,7 +278,7 @@ jobs:
       run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.target }}
       shell: bash
     - name: Install golang
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: '>=1.22.0'
     - name: Install ${{ matrix.target }} toolchain
