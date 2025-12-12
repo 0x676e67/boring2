@@ -545,11 +545,7 @@ fn built_boring_source_path(config: &Config) -> &PathBuf {
         }
 
         cfg.build_target("ssl").build();
-        if cfg!(not(windows)) {
-            cfg.build_target("crypto").build()
-        } else {
-            cfg.build_target("crypto").build().canonicalize().unwrap()
-        }
+        cfg.build_target("crypto").build()
     })
 }
 
@@ -582,33 +578,51 @@ fn emit_link_directives(config: &Config) {
     let bssl_dir = built_boring_source_path(config);
     let build_path = get_boringssl_platform_output_path(config);
 
+    // On Windows, cmake may strip the verbatim prefix; add it back if needed for long paths
+    #[cfg(windows)]
+    let bssl_dir_str = {
+        use std::os::windows::ffi::OsStrExt;
+        let path_str = bssl_dir.display().to_string();
+        let wide: Vec<u16> = bssl_dir.as_os_str().encode_wide().collect();
+
+        if !wide.starts_with(&[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16]) {
+            if wide.len() >= 2 && wide[1] == b':' as u16 {
+                // Drive path: add \\?\ prefix
+                format!(r"\\?\{}", path_str)
+            } else if wide.len() >= 2 && wide[0] == b'\\' as u16 && wide[1] == b'\\' as u16 {
+                // UNC path: add \\?\UNC\ prefix
+                format!(r"\\?\UNC\{}", &path_str[2..])
+            } else {
+                path_str
+            }
+        } else {
+            path_str
+        }
+    };
+
+    #[cfg(not(windows))]
+    let bssl_dir_str = bssl_dir.display().to_string();
+
     if config.is_bazel || (config.features.is_fips_like() && config.env.path.is_some()) {
         println!(
             "cargo:rustc-link-search=native={}/lib/{}",
-            bssl_dir.display(),
-            build_path
+            bssl_dir_str, build_path
         );
     } else {
         // todo(rmehra): clean this up, I think these are pretty redundant
         println!(
             "cargo:rustc-link-search=native={}/build/crypto/{}",
-            bssl_dir.display(),
-            build_path
+            bssl_dir_str, build_path
         );
         println!(
             "cargo:rustc-link-search=native={}/build/ssl/{}",
-            bssl_dir.display(),
-            build_path
+            bssl_dir_str, build_path
         );
         println!(
             "cargo:rustc-link-search=native={}/build/{}",
-            bssl_dir.display(),
-            build_path
+            bssl_dir_str, build_path
         );
-        println!(
-            "cargo:rustc-link-search=native={}/build",
-            bssl_dir.display(),
-        );
+        println!("cargo:rustc-link-search=native={}/build", bssl_dir_str,);
     }
 
     if let Some(cpp_lib) = get_cpp_runtime_lib(config) {
