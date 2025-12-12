@@ -545,7 +545,11 @@ fn built_boring_source_path(config: &Config) -> &PathBuf {
         }
 
         cfg.build_target("ssl").build();
-        cfg.build_target("crypto").build()
+        if cfg!(not(windows)) {
+            cfg.build_target("crypto").build()
+        } else {
+            cfg.build_target("crypto").build().canonicalize().unwrap()
+        }
     })
 }
 
