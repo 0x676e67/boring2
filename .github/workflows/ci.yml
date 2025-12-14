@@ -381,11 +381,6 @@ jobs:
             bin: ndk
             test: false
             custom_env: {}
-          - target: i686-linux-android
-            os: ubuntu-latest
-            bin: ndk
-            test: false
-            custom_env: {}
     defaults:
       run:
         working-directory: test-project
@@ -408,13 +403,7 @@ jobs:
         run: sudo apt update && sudo apt install -y ${{ matrix.apt_packages }}
       - name: Install cargo-ndk
         if: contains(matrix.target, 'android')
-        run: |
-          cargo install cargo-ndk
-          # Openssl fix for i686: https://github.com/rust-openssl/rust-openssl/issues/2163#issuecomment-2692363343
-          echo "ANDROID_NDK=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_LATEST_HOME" >> $GITHUB_ENV
-          echo "CARGO_TARGET_I686_LINUX_ANDROID_RUSTFLAGS=-C link-arg=-lclang_rt.builtins-i686-android -C link-arg=-L${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/21/lib/linux/" >> $GITHUB_ENV
+        run: cargo install cargo-ndk
       - name: Build without prefixing
         env: ${{ matrix.custom_env }}
         shell: bash
