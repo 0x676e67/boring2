@@ -6,7 +6,7 @@ use std::result::Result as StdResult;
 /// Governs version-specific behavior in the TLS layer
 // TODO: add support for draft version 2.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub enum QuicVersion {
     V1Draft29,
     V1Draft30,
@@ -16,13 +16,8 @@ pub enum QuicVersion {
     V1Draft34,
 
     /// First stable RFC version.
+    #[default]
     V1,
-}
-
-impl Default for QuicVersion {
-    fn default() -> Self {
-        Self::V1
-    }
 }
 
 impl QuicVersion {
