@@ -44,7 +44,7 @@ jobs:
         run: |
           echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
       - name: Cache cargo index
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry/index
           key: index-${{ runner.os }}-${{ github.run_number }}
@@ -53,14 +53,14 @@ jobs:
       - name: Create lockfile
         run: cargo generate-lockfile
       - name: Cache cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cargo/registry/cache
           key: registry-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.lock') }}
       - name: Fetch dependencies
         run: cargo fetch
       - name: Cache target directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           key: clippy-target-${{ runner.os }}-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.lock') }}
