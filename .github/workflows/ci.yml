@@ -386,7 +386,7 @@ jobs:
         working-directory: test-project
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Create test project
         working-directory: .
         run: |
