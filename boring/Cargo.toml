@@ -1,7 +1,7 @@
 [package]
 name = "boring2"
 version = { workspace = true }
-authors = ["Steven Fackler <sfackler@gmail.com>", "Ivan Nikulin <ifaaan@gmail.com>"]
+authors = ["0x676e67 <gngppz@gmail.com>", "Steven Fackler <sfackler@gmail.com>", "Ivan Nikulin <ifaaan@gmail.com>"]
 license = "Apache-2.0"
 description = "BoringSSL bindings"
 repository = { workspace = true }

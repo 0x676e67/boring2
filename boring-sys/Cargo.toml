@@ -1,9 +1,10 @@
 [package]
 name = "boring-sys2"
 version = { workspace = true }
-authors = ["Alex Crichton <alex@alexcrichton.com>",
-           "Steven Fackler <sfackler@gmail.com>",
-           "Ivan Nikulin <ifaaan@gmail.com>"]
+authors = ["0x676e67 <gngppz@gmail.com>",
+            "Alex Crichton <alex@alexcrichton.com>",
+            "Steven Fackler <sfackler@gmail.com>",
+            "Ivan Nikulin <ifaaan@gmail.com>"]
 license = "MIT"
 description = "FFI bindings to BoringSSL"
 repository = { workspace = true }
