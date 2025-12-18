@@ -239,12 +239,6 @@ jobs:
     - name: Set Android Linker path
       if: endsWith(matrix.thing, '-android')
       run: echo "CARGO_TARGET_$(echo ${{ matrix.target }} | tr \\-a-z _A-Z)_LINKER=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/$(echo ${{ matrix.target }} | sed s/armv7/armv7a/)21-clang++" >> "$GITHUB_ENV"
-    # https://github.com/rust-lang/cmake-rs/pull/259 breaks handling of long Windows paths
-    # https://github.com/cloudflare/boring/issues/414
-    # https://github.com/0x676e67/boring/commit/efacedb5bf409d0d773e8ce4f5080cb4b4c10f54
-    - name: Pin some dependencies, temporary patch for cmake breakage
-      run: |
-        cargo update --package cmake --precise 0.1.54
     - name: Build tests
       # We `build` because we want the linker to verify we are cross-compiling correctly for check-only targets.
       run: cargo build --target ${{ matrix.target }} --tests ${{ matrix.extra_test_args }}
