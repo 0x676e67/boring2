@@ -1,75 +1,84 @@
-//! Async TLS streams backed by BoringSSL
+//! Async TLS streams backed by BoringSSL.
 //!
-//! This library is an implementation of TLS streams using BoringSSL for
-//! negotiating the connection. Each TLS stream implements the `Read` and
-//! `Write` traits to interact and interoperate with the rest of the futures I/O
-//! ecosystem. Client connections initiated from this crate verify hostnames
-//! automatically and by default.
+//! This crate provides a wrapper around the [`boring`] crate's [`SslStream`](ssl::SslStream) type
+//! that works with with [`tokio`]'s [`AsyncRead`] and [`AsyncWrite`] traits rather than std's
+//! blocking [`Read`] and [`Write`] traits.
 //!
-//! `tokio-boring2` exports this ability through [`accept`] and [`connect`]. `accept` should
-//! be used by servers, and `connect` by clients. These augment the functionality provided by the
-//! [`boring2`] crate, on which this crate is built. Configuration of TLS parameters is still
-//! primarily done through the [`boring2`] crate.
-#![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+//! This file reimplements tokio-boring with the [overhauled](https://github.com/sfackler/tokio-openssl/commit/56f6618ab619f3e431fa8feec2d20913bf1473aa)
+//! tokio-openssl interface while the tokio APIs from official [boring] crate is not yet caught up to it.
 
-use boring::ssl::{
-    self, ConnectConfiguration, ErrorCode, MidHandshakeSslStream, ShutdownResult, SslAcceptor,
-    SslRef,
-};
-use boring_sys as ffi;
-use std::error::Error;
+#[cfg(test)]
+mod test;
+
+use boring::error::ErrorStack;
+use boring::ssl::{self, ErrorCode, ShutdownResult, Ssl, SslRef, SslStream as SslStreamCore};
 use std::fmt;
-use std::future::Future;
-use std::io::{self, Write};
+use std::future;
+use std::io::{self, Read, Write};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-mod async_callbacks;
-mod bridge;
-
-use self::bridge::AsyncStreamBridge;
-
-pub use crate::async_callbacks::SslContextBuilderExt;
-pub use boring::ssl::{
-    AsyncPrivateKeyMethod, AsyncPrivateKeyMethodError, AsyncSelectCertError, BoxGetSessionFinish,
-    BoxGetSessionFuture, BoxPrivateKeyMethodFinish, BoxPrivateKeyMethodFuture, BoxSelectCertFinish,
-    BoxSelectCertFuture, ExDataFuture,
-};
-
-/// Asynchronously performs a client-side TLS handshake over the provided stream.
-///
-/// This function automatically sets the task waker on the `Ssl` from `config` to
-/// allow to make use of async callbacks provided by the boring crate.
-pub async fn connect<S>(
-    config: ConnectConfiguration,
-    domain: &str,
+struct StreamWrapper<S> {
     stream: S,
-) -> Result<SslStream<S>, HandshakeError<S>>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    let mid_handshake = config
-        .setup_connect(domain, AsyncStreamBridge::new(stream))
-        .map_err(|err| HandshakeError(ssl::HandshakeError::SetupFailure(err)))?;
-
-    HandshakeFuture(Some(mid_handshake)).await
+    context: usize,
 }
 
-/// Asynchronously performs a server-side TLS handshake over the provided stream.
-///
-/// This function automatically sets the task waker on the `Ssl` from `config` to
-/// allow to make use of async callbacks provided by the boring crate.
-pub async fn accept<S>(acceptor: &SslAcceptor, stream: S) -> Result<SslStream<S>, HandshakeError<S>>
+impl<S> fmt::Debug for StreamWrapper<S>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: fmt::Debug,
 {
-    let mid_handshake = acceptor
-        .setup_accept(AsyncStreamBridge::new(stream))
-        .map_err(|err| HandshakeError(ssl::HandshakeError::SetupFailure(err)))?;
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Debug::fmt(&self.stream, fmt)
+    }
+}
 
-    HandshakeFuture(Some(mid_handshake)).await
+impl<S> StreamWrapper<S> {
+    /// # Safety
+    ///
+    /// Must be called with `context` set to a valid pointer to a live `Context` object, and the
+    /// wrapper must be pinned in memory.
+    unsafe fn parts(&mut self) -> (Pin<&mut S>, &mut Context<'_>) {
+        debug_assert_ne!(self.context, 0);
+        let stream = Pin::new_unchecked(&mut self.stream);
+        let context = &mut *(self.context as *mut _);
+        (stream, context)
+    }
+}
+
+impl<S> Read for StreamWrapper<S>
+where
+    S: AsyncRead,
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let (stream, cx) = unsafe { self.parts() };
+        let mut buf = ReadBuf::new(buf);
+        match stream.poll_read(cx, &mut buf)? {
+            Poll::Ready(()) => Ok(buf.filled().len()),
+            Poll::Pending => Err(io::Error::from(io::ErrorKind::WouldBlock)),
+        }
+    }
+}
+
+impl<S> Write for StreamWrapper<S>
+where
+    S: AsyncWrite,
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let (stream, cx) = unsafe { self.parts() };
+        match stream.poll_write(cx, buf) {
+            Poll::Ready(r) => r,
+            Poll::Pending => Err(io::Error::from(io::ErrorKind::WouldBlock)),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        let (stream, cx) = unsafe { self.parts() };
+        match stream.poll_flush(cx) {
+            Poll::Ready(r) => r,
+            Poll::Pending => Err(io::Error::from(io::ErrorKind::WouldBlock)),
+        }
+    }
 }
 
 fn cvt<T>(r: io::Result<T>) -> Poll<io::Result<T>> {
@@ -80,74 +89,70 @@ fn cvt<T>(r: io::Result<T>) -> Poll<io::Result<T>> {
     }
 }
 
-/// A partially constructed `SslStream`, useful for unusual handshakes.
-pub struct SslStreamBuilder<S> {
-    inner: ssl::SslStreamBuilder<AsyncStreamBridge<S>>,
-}
-
-impl<S> SslStreamBuilder<S>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    /// Begins creating an `SslStream` atop `stream`.
-    pub fn new(ssl: ssl::Ssl, stream: S) -> Self {
-        Self {
-            inner: ssl::SslStreamBuilder::new(ssl, AsyncStreamBridge::new(stream)),
-        }
-    }
-
-    /// Initiates a client-side TLS handshake.
-    pub async fn accept(self) -> Result<SslStream<S>, HandshakeError<S>> {
-        let mid_handshake = self.inner.setup_accept();
-
-        HandshakeFuture(Some(mid_handshake)).await
-    }
-
-    /// Initiates a server-side TLS handshake.
-    pub async fn connect(self) -> Result<SslStream<S>, HandshakeError<S>> {
-        let mid_handshake = self.inner.setup_connect();
-
-        HandshakeFuture(Some(mid_handshake)).await
+fn cvt_ossl<T>(r: Result<T, ssl::Error>) -> Poll<Result<T, ssl::Error>> {
+    match r {
+        Ok(v) => Poll::Ready(Ok(v)),
+        Err(e) => match e.code() {
+            ErrorCode::WANT_READ | ErrorCode::WANT_WRITE => Poll::Pending,
+            _ => Poll::Ready(Err(e)),
+        },
     }
 }
 
-impl<S> SslStreamBuilder<S> {
-    /// Returns a shared reference to the `Ssl` object associated with this builder.
-    #[must_use]
-    pub fn ssl(&self) -> &SslRef {
-        self.inner.ssl()
-    }
-
-    /// Returns a mutable reference to the `Ssl` object associated with this builder.
-    pub fn ssl_mut(&mut self) -> &mut SslRef {
-        self.inner.ssl_mut()
-    }
-}
-
-/// A wrapper around an underlying raw stream which implements the SSL
-/// protocol.
-///
-/// A `SslStream<S>` represents a handshake that has been completed successfully
-/// and both the server and the client are ready for receiving and sending
-/// data. Bytes read from a `SslStream` are decrypted from `S` and bytes written
-/// to a `SslStream` are encrypted when passing through to `S`.
+/// An asynchronous version of [`boring::ssl::SslStream`].
 #[derive(Debug)]
-pub struct SslStream<S>(ssl::SslStream<AsyncStreamBridge<S>>);
+pub struct SslStream<S>(SslStreamCore<StreamWrapper<S>>);
+
+impl<S: AsyncRead + AsyncWrite> SslStream<S> {
+    /// Like [`SslStream::new`](ssl::SslStream::new).
+    pub fn new(ssl: Ssl, stream: S) -> Result<Self, ErrorStack> {
+        SslStreamCore::new(ssl, StreamWrapper { stream, context: 0 }).map(SslStream)
+    }
+
+    /// Like [`SslStream::connect`](ssl::SslStream::connect).
+    pub fn poll_connect(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), ssl::Error>> {
+        self.with_context(cx, |s| cvt_ossl(s.connect()))
+    }
+
+    /// A convenience method wrapping [`poll_connect`](Self::poll_connect).
+    pub async fn connect(mut self: Pin<&mut Self>) -> Result<(), ssl::Error> {
+        future::poll_fn(|cx| self.as_mut().poll_connect(cx)).await
+    }
+
+    /// Like [`SslStream::accept`](ssl::SslStream::accept).
+    pub fn poll_accept(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), ssl::Error>> {
+        self.with_context(cx, |s| cvt_ossl(s.accept()))
+    }
+
+    /// A convenience method wrapping [`poll_accept`](Self::poll_accept).
+    pub async fn accept(mut self: Pin<&mut Self>) -> Result<(), ssl::Error> {
+        future::poll_fn(|cx| self.as_mut().poll_accept(cx)).await
+    }
+
+    /// Like [`SslStream::do_handshake`](ssl::SslStream::do_handshake).
+    pub fn poll_do_handshake(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), ssl::Error>> {
+        self.with_context(cx, |s| cvt_ossl(s.do_handshake()))
+    }
+
+    /// A convenience method wrapping [`poll_do_handshake`](Self::poll_do_handshake).
+    pub async fn do_handshake(mut self: Pin<&mut Self>) -> Result<(), ssl::Error> {
+        future::poll_fn(|cx| self.as_mut().poll_do_handshake(cx)).await
+    }
+}
 
 impl<S> SslStream<S> {
     /// Returns a shared reference to the `Ssl` object associated with this stream.
-    #[must_use]
     pub fn ssl(&self) -> &SslRef {
         self.0.ssl()
     }
 
-    /// Returns a mutable reference to the `Ssl` object associated with this stream.
-    pub fn ssl_mut(&mut self) -> &mut SslRef {
-        self.0.ssl_mut()
-    }
-
     /// Returns a shared reference to the underlying stream.
-    #[must_use]
     pub fn get_ref(&self) -> &S {
         &self.0.get_ref().stream
     }
@@ -157,53 +162,34 @@ impl<S> SslStream<S> {
         &mut self.0.get_mut().stream
     }
 
-    fn run_in_context<F, R>(&mut self, ctx: &mut Context<'_>, f: F) -> R
+    /// Returns a pinned mutable reference to the underlying stream.
+    pub fn get_pin_mut(self: Pin<&mut Self>) -> Pin<&mut S> {
+        unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().0.get_mut().stream) }
+    }
+
+    fn with_context<F, R>(self: Pin<&mut Self>, ctx: &mut Context<'_>, f: F) -> R
     where
-        F: FnOnce(&mut ssl::SslStream<AsyncStreamBridge<S>>) -> R,
+        F: FnOnce(&mut SslStreamCore<StreamWrapper<S>>) -> R,
     {
-        self.0.get_mut().set_waker(Some(ctx));
-
-        let result = f(&mut self.0);
-
-        // NOTE(nox): This should also be executed when `f` panics,
-        // but it's not that important as boring segfaults on panics
-        // and we always set the context prior to doing anything with
-        // the inner async stream.
-        self.0.get_mut().set_waker(None);
-
-        result
+        let this = unsafe { self.get_unchecked_mut() };
+        this.0.get_mut().context = ctx as *mut _ as usize;
+        let r = f(&mut this.0);
+        this.0.get_mut().context = 0;
+        r
     }
 }
 
-impl<S> SslStream<S>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    /// Constructs an `SslStream` from a pointer to the underlying OpenSSL `SSL` struct.
-    ///
-    /// This is useful if the handshake has already been completed elsewhere.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the pointer is valid.
-    pub unsafe fn from_raw_parts(ssl: *mut ffi::SSL, stream: S) -> Self {
-        Self(ssl::SslStream::from_raw_parts(
-            ssl,
-            AsyncStreamBridge::new(stream),
-        ))
-    }
-}
-
+#[cfg(feature = "read_uninit")]
 impl<S> AsyncRead for SslStream<S>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + AsyncWrite,
 {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         ctx: &mut Context<'_>,
-        buf: &mut ReadBuf,
+        buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        self.run_in_context(ctx, |s| {
+        self.with_context(ctx, |s| {
             // SAFETY: read_uninit does not de-initialize the buffer.
             match cvt(s.read_uninit(unsafe { buf.unfilled_mut() }))? {
                 Poll::Ready(nread) => {
@@ -219,25 +205,52 @@ where
     }
 }
 
+#[cfg(not(feature = "read_uninit"))]
+impl<S> AsyncRead for SslStream<S>
+where
+    S: AsyncRead + AsyncWrite,
+{
+    fn poll_read(
+        self: Pin<&mut Self>,
+        ctx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        self.with_context(ctx, |s| {
+            // This isn't really "proper", but rust-openssl doesn't currently expose a suitable interface even though
+            // OpenSSL itself doesn't require the buffer to be initialized. So this is good enough for now.
+            let slice = unsafe {
+                let buf = buf.unfilled_mut();
+                std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len())
+            };
+            match cvt(s.read(slice))? {
+                Poll::Ready(nread) => {
+                    unsafe {
+                        buf.assume_init(nread);
+                    }
+                    buf.advance(nread);
+                    Poll::Ready(Ok(()))
+                }
+                Poll::Pending => Poll::Pending,
+            }
+        })
+    }
+}
+
 impl<S> AsyncWrite for SslStream<S>
 where
-    S: AsyncRead + AsyncWrite + Unpin,
+    S: AsyncRead + AsyncWrite,
 {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        ctx: &mut Context,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        self.run_in_context(ctx, |s| cvt(s.write(buf)))
+    fn poll_write(self: Pin<&mut Self>, ctx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
+        self.with_context(ctx, |s| cvt(s.write(buf)))
     }
 
-    fn poll_flush(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<io::Result<()>> {
-        self.run_in_context(ctx, |s| cvt(s.flush()))
+    fn poll_flush(self: Pin<&mut Self>, ctx: &mut Context) -> Poll<io::Result<()>> {
+        self.with_context(ctx, |s| cvt(s.flush()))
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, ctx: &mut Context) -> Poll<io::Result<()>> {
-        match self.run_in_context(ctx, |s| s.shutdown()) {
-            Ok(ShutdownResult::Sent | ShutdownResult::Received) => {}
+        match self.as_mut().with_context(ctx, |s| s.shutdown()) {
+            Ok(ShutdownResult::Sent) | Ok(ShutdownResult::Received) => {}
             Err(ref e) if e.code() == ErrorCode::ZERO_RETURN => {}
             Err(ref e) if e.code() == ErrorCode::WANT_READ || e.code() == ErrorCode::WANT_WRITE => {
                 return Poll::Pending;
@@ -247,128 +260,37 @@ where
             }
         }
 
-        Pin::new(&mut self.0.get_mut().stream).poll_shutdown(ctx)
+        self.get_pin_mut().poll_shutdown(ctx)
     }
 }
 
-/// The error type returned after a failed handshake.
-pub struct HandshakeError<S>(ssl::HandshakeError<AsyncStreamBridge<S>>);
+#[tokio::test]
+async fn test_google() {
+    use boring::ssl;
+    use std::net::ToSocketAddrs;
+    use std::pin::Pin;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpStream;
 
-impl<S> HandshakeError<S> {
-    /// Returns a shared reference to the `Ssl` object associated with this error.
-    #[must_use]
-    pub fn ssl(&self) -> Option<&SslRef> {
-        match &self.0 {
-            ssl::HandshakeError::Failure(s) => Some(s.ssl()),
-            _ => None,
-        }
-    }
+    let addr = "8.8.8.8:443".to_socket_addrs().unwrap().next().unwrap();
+    let stream = TcpStream::connect(&addr).await.unwrap();
 
-    /// Converts error to the source data stream that was used for the handshake.
-    #[must_use]
-    pub fn into_source_stream(self) -> Option<S> {
-        match self.0 {
-            ssl::HandshakeError::Failure(s) => Some(s.into_source_stream().stream),
-            _ => None,
-        }
-    }
+    let ssl_context = ssl::SslContext::builder(ssl::SslMethod::tls())
+        .unwrap()
+        .build();
+    let ssl = ssl::Ssl::new(&ssl_context).unwrap();
+    let mut stream = SslStream::new(ssl, stream).unwrap();
 
-    /// Returns a reference to the source data stream.
-    #[must_use]
-    pub fn as_source_stream(&self) -> Option<&S> {
-        match &self.0 {
-            ssl::HandshakeError::Failure(s) => Some(&s.get_ref().stream),
-            _ => None,
-        }
-    }
+    Pin::new(&mut stream).connect().await.unwrap();
 
-    /// Returns the error code, if any.
-    #[must_use]
-    pub fn code(&self) -> Option<ErrorCode> {
-        match &self.0 {
-            ssl::HandshakeError::Failure(s) => Some(s.error().code()),
-            _ => None,
-        }
-    }
+    stream.write_all(b"GET / HTTP/1.0\r\n\r\n").await.unwrap();
 
-    /// Returns a reference to the inner I/O error, if any.
-    #[must_use]
-    pub fn as_io_error(&self) -> Option<&io::Error> {
-        match &self.0 {
-            ssl::HandshakeError::Failure(s) => s.error().io_error(),
-            _ => None,
-        }
-    }
-}
+    let mut buf = vec![];
+    stream.read_to_end(&mut buf).await.unwrap();
+    let response = String::from_utf8_lossy(&buf);
+    let response = response.trim_end();
 
-impl<S> fmt::Debug for HandshakeError<S>
-where
-    S: fmt::Debug,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, fmt)
-    }
-}
-
-impl<S> fmt::Display for HandshakeError<S> {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, fmt)
-    }
-}
-
-impl<S> Error for HandshakeError<S>
-where
-    S: fmt::Debug,
-{
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.0.source()
-    }
-}
-
-/// Future for an ongoing TLS handshake.
-///
-/// See [`connect`] and [`accept`].
-pub struct HandshakeFuture<S>(Option<MidHandshakeSslStream<AsyncStreamBridge<S>>>);
-
-impl<S> Future for HandshakeFuture<S>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    type Output = Result<SslStream<S>, HandshakeError<S>>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut mid_handshake = self.0.take().expect("future polled after completion");
-
-        mid_handshake.get_mut().set_waker(Some(ctx));
-        mid_handshake
-            .ssl_mut()
-            .set_task_waker(Some(ctx.waker().clone()));
-
-        match mid_handshake.handshake() {
-            Ok(mut stream) => {
-                stream.get_mut().set_waker(None);
-                stream.ssl_mut().set_task_waker(None);
-
-                Poll::Ready(Ok(SslStream(stream)))
-            }
-            Err(ssl::HandshakeError::WouldBlock(mut mid_handshake)) => {
-                mid_handshake.get_mut().set_waker(None);
-                mid_handshake.ssl_mut().set_task_waker(None);
-
-                self.0 = Some(mid_handshake);
-
-                Poll::Pending
-            }
-            Err(ssl::HandshakeError::Failure(mut mid_handshake)) => {
-                mid_handshake.get_mut().set_waker(None);
-
-                Poll::Ready(Err(HandshakeError(ssl::HandshakeError::Failure(
-                    mid_handshake,
-                ))))
-            }
-            Err(err @ ssl::HandshakeError::SetupFailure(_)) => {
-                Poll::Ready(Err(HandshakeError(err)))
-            }
-        }
-    }
+    // any response code is fine
+    assert!(response.starts_with("HTTP/1.0 "));
+    assert!(response.ends_with("</html>") || response.ends_with("</HTML>"));
 }
