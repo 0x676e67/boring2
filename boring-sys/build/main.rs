@@ -581,12 +581,13 @@ fn main() {
     if !config.env.docs_rs {
         emit_link_directives(&config);
     }
-    if config.features.prefix_symbols
-        && ["macos", "ios", "windows"].contains(&config.target_os.as_str())
-    {
-        panic!("The `prefix_symbols` feature is not supported on macOS/iOS or windows targets.");
-    }
+
     if config.features.prefix_symbols {
+        if ["macos", "ios", "windows"].contains(&config.target_os.as_str()) {
+            panic!(
+                "The `prefix_symbols` feature is not supported on macOS/iOS or windows targets."
+            );
+        }
         prefix_symbols(&config);
     }
     generate_bindings(&config);
