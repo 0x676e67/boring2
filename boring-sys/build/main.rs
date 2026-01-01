@@ -583,12 +583,14 @@ fn main() {
     }
 
     if config.features.prefix_symbols {
-        if ["macos", "ios", "windows"].contains(&config.target_os.as_str()) {
-            panic!(
-                "The `prefix_symbols` feature is not supported on macOS/iOS or windows targets."
-            );
+        match config.target_os.as_str() {
+            "macos" | "ios" | "windows" => {
+                panic!(
+                    "The `prefix_symbols` feature is not supported on macOS/iOS or windows targets."
+                );
+            }
+            _ => prefix_symbols(&config),
         }
-        prefix_symbols(&config);
     }
     generate_bindings(&config);
 }
