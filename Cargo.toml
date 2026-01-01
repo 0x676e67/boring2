@@ -41,5 +41,3 @@ antidote = "1.0.0"
 linked_hash_set = "0.1"
 openssl-macros = "0.1.1"
 autocfg = "1.3.0"
-compio = { version = "0.16.0" }
-compio-io = { version = "0.8.0" }
