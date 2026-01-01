@@ -5,18 +5,23 @@
 //! blocking [`Read`] and [`Write`] traits.
 //!
 //! This file reimplements tokio-boring with the [overhauled](https://github.com/sfackler/tokio-openssl/commit/56f6618ab619f3e431fa8feec2d20913bf1473aa)
-//! tokio-openssl interface while the tokio APIs from official [boring] crate is not yet caught up to it.
+//! tokio-openssl interface while the tokio APIs from official [boring] crate is not yet caught up
+//! to it.
 
 #[cfg(test)]
 mod test;
 
-use boring::error::ErrorStack;
-use boring::ssl::{self, ErrorCode, ShutdownResult, Ssl, SslRef, SslStream as SslStreamCore};
-use std::fmt;
-use std::future;
-use std::io::{self, Read, Write};
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::{
+    fmt, future,
+    io::{self, Read, Write},
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+use boring::{
+    error::ErrorStack,
+    ssl::{self, ErrorCode, ShutdownResult, Ssl, SslRef, SslStream as SslStreamCore},
+};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 struct StreamWrapper<S> {
@@ -216,8 +221,9 @@ where
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         self.with_context(ctx, |s| {
-            // This isn't really "proper", but rust-openssl doesn't currently expose a suitable interface even though
-            // OpenSSL itself doesn't require the buffer to be initialized. So this is good enough for now.
+            // This isn't really "proper", but rust-openssl doesn't currently expose a suitable
+            // interface even though OpenSSL itself doesn't require the buffer to be
+            // initialized. So this is good enough for now.
             let slice = unsafe {
                 let buf = buf.unfilled_mut();
                 std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len())
@@ -266,11 +272,13 @@ where
 
 #[tokio::test]
 async fn test_google() {
+    use std::{net::ToSocketAddrs, pin::Pin};
+
     use boring::ssl;
-    use std::net::ToSocketAddrs;
-    use std::pin::Pin;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpStream;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpStream,
+    };
 
     let addr = "8.8.8.8:443".to_socket_addrs().unwrap().next().unwrap();
     let stream = TcpStream::connect(&addr).await.unwrap();

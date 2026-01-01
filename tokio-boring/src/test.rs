@@ -1,10 +1,13 @@
-use crate::SslStream;
+use std::{net::ToSocketAddrs, pin::Pin};
+
 use boring::ssl::{Ssl, SslAcceptor, SslConnector, SslFiletype, SslMethod};
 use futures::future;
-use std::net::ToSocketAddrs;
-use std::pin::Pin;
-use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
+
+use crate::SslStream;
 
 #[tokio::test]
 async fn google() {
