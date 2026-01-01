@@ -3,7 +3,6 @@ members = [
     "boring",
     "boring-sys",
     "tokio-boring",
-    "compio-boring",
     "quinn-boring",
 ]
 resolver = "2"
@@ -23,7 +22,6 @@ publish = false
 boring-sys = { package = "boring-sys2", version = "5.0.0-alpha.10", path = "./boring-sys" }
 boring = { package = "boring2", version = "5.0.0-alpha.10", path = "./boring" }
 tokio-boring = { package = "tokio-boring2", version = "5.0.0-alpha.10", path = "./tokio-boring" }
-compio-boring = { package = "compio-boring2", version = "5.0.0-alpha.10", path = "./compio-boring" }
 
 bindgen = { version = "0.72.0", default-features = false, features = ["runtime"] }
 bitflags = "2.9"

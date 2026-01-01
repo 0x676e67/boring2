@@ -7,7 +7,6 @@ BoringSSL bindings for the Rust programming language and TLS adapters for [tokio
 ## Documentation
  - Boring API: <https://docs.rs/boring2>
  - tokio TLS adapters: <https://docs.rs/tokio-boring2>
- - compio TLS adapters: <https://docs.rs/compio-boring2>
  - FFI bindings: <https://docs.rs/boring-sys2>
 
 ## Contribution
