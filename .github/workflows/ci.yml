@@ -237,7 +237,7 @@ jobs:
       run: |
         echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
     - name: Prepopulate cargo index
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       with:
         path: |
           ~/.cargo/registry/index
