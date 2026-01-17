@@ -576,8 +576,8 @@ fn main() {
     if config.features.prefix_symbols {
         match config.target_os.as_str() {
             "macos" | "ios" | "windows" => {
-                panic!(
-                    "The `prefix_symbols` feature is not supported on macOS/iOS or windows targets."
+                println!(
+                    "cargo:warning=The `prefix_symbols` feature is not supported on macOS/iOS or Windows targets. Skipping symbol prefixing."
                 );
             }
             _ => prefix_symbols(&config),
