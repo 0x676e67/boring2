@@ -203,6 +203,8 @@ fn get_boringssl_cmake_config(config: &Config) -> cmake::Config {
     let src_path = get_boringssl_source_path(config);
     let mut boringssl_cmake = cmake::Config::new(src_path);
 
+    boringssl_cmake.define("CMAKE_BUILD_TYPE", "Release");
+
     if config.host == config.target {
         return boringssl_cmake;
     }
