@@ -15,6 +15,8 @@ An implementation of SSL streams for Tokio backed by BoringSSL
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
+default = ["read_uninit"]
+
 # Use a FIPS-validated version of boringssl.
 fips = ["boring/fips"]
 
@@ -32,3 +34,11 @@ tokio = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true, features = [ "full" ] }
 anyhow = { workspace = true }
+criterion = { version = "0.8.1", features = ["async_tokio", "html_reports"] }
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-pemfile = "2.0"
+
+[[bench]]
+name = "io"
+harness = false
