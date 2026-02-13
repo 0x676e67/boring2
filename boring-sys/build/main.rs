@@ -580,7 +580,11 @@ fn main() {
                     "cargo:warning=The `prefix_symbols` feature is not supported on macOS/iOS or Windows targets. Skipping symbol prefixing."
                 );
             }
-            _ => prefix_symbols(&config),
+            _ => {
+                if !config.env.docs_rs {
+                    prefix_symbols(&config)
+                }
+            }
         }
     }
     generate_bindings(&config);
