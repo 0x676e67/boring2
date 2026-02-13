@@ -14,7 +14,7 @@ impl bindgen::callbacks::ParseCallbacks for PrefixCallback {
         &self,
         item_info: bindgen::callbacks::ItemInfo<'_>,
     ) -> Option<String> {
-        Some(format!("{PREFIX}_{}", item_info.name))
+        Some(format!("b2_{PREFIX}_{}", item_info.name))
     }
 }
 

@@ -9,7 +9,7 @@ license = "MIT"
 description = "FFI bindings to BoringSSL"
 repository = { workspace = true }
 documentation = "https://docs.rs/boring-sys2"
-links = "boringssl"
+links = "b2_boringssl"
 build = "build/main.rs"
 readme = "README.md"
 categories = ["cryptography", "external-ffi-bindings"]
