@@ -581,6 +581,9 @@ fn main() {
                 );
             }
             _ => {
+                // Symbol prefixing requires the 'nm' tool which is not available in the docs.rs
+                // build environment. When building documentation, symbol prefixing is skipped.
+                // For regular builds, this operation is costly and only performed when necessary.
                 if !config.env.docs_rs {
                     prefix_symbols(&config)
                 }
