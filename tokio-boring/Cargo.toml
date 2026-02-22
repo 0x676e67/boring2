@@ -4,6 +4,7 @@ version = { workspace = true }
 authors = ["0x676e67 <gngppz@gmail.com>", "Alex Crichton <alex@alexcrichton.com>", "Ivan Nikulin <ifaaan@gmail.com>"]
 license = "MIT OR Apache-2.0"
 edition = { workspace = true }
+rust-version = { workspace = true }
 repository = { workspace = true }
 homepage = "https://github.com/0x676e67/boring2"
 documentation = "https://docs.rs/tokio-boring2"
@@ -15,6 +16,8 @@ An implementation of SSL streams for Tokio backed by BoringSSL
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
+default = ["boring/default"]
+
 # Use a FIPS-validated version of boringssl.
 fips = ["boring/fips"]
 

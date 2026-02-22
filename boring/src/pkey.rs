@@ -40,7 +40,6 @@
 //! println!("{:?}", str::from_utf8(pub_key.as_slice()).unwrap());
 //! ```
 
-use crate::ffi;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use libc::{c_int, c_long};
 use openssl_macros::corresponds;
@@ -54,7 +53,9 @@ use crate::dh::Dh;
 use crate::dsa::Dsa;
 use crate::ec::EcKey;
 use crate::error::ErrorStack;
+use crate::ffi;
 use crate::rsa::Rsa;
+use crate::try_int;
 use crate::util::{invoke_passwd_cb, CallbackState};
 use crate::{cvt, cvt_0i, cvt_p};
 
@@ -361,7 +362,7 @@ impl<T> PKey<T> {
             cvt(ffi::EVP_PKEY_assign(
                 pkey.0,
                 ffi::EVP_PKEY_RSA,
-                rsa.as_ptr() as *mut _,
+                rsa.as_ptr().cast(),
             ))?;
             mem::forget(rsa);
             Ok(pkey)
@@ -377,7 +378,7 @@ impl<T> PKey<T> {
             cvt(ffi::EVP_PKEY_assign(
                 pkey.0,
                 ffi::EVP_PKEY_EC,
-                ec_key.as_ptr() as *mut _,
+                ec_key.as_ptr().cast(),
             ))?;
             mem::forget(ec_key);
             Ok(pkey)
@@ -455,7 +456,7 @@ impl PKey<Private> {
                 bio.as_ptr(),
                 ptr::null_mut(),
                 Some(invoke_passwd_cb::<F>),
-                &mut cb as *mut _ as *mut _,
+                std::ptr::addr_of_mut!(cb).cast(),
             ))
             .map(|p| PKey::from_ptr(p))
         }
@@ -479,7 +480,7 @@ impl PKey<Private> {
                 bio.as_ptr(),
                 ptr::null_mut(),
                 None,
-                passphrase.as_ptr() as *const _ as *mut _,
+                passphrase.as_ptr().cast_mut().cast(),
             ))
             .map(|p| PKey::from_ptr(p))
         }

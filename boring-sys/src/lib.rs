@@ -10,7 +10,6 @@
     non_upper_case_globals,
     unused_imports
 )]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 use std::convert::TryInto;
 use std::ffi::c_void;
@@ -20,13 +19,22 @@ use std::os::raw::{c_char, c_int, c_uint, c_ulong};
     clippy::useless_transmute,
     clippy::derive_partial_eq_without_eq,
     clippy::ptr_offset_with_cast,
-    unpredictable_function_pointer_comparisons, // TODO: remove Eq/PartialEq in v5
-    dead_code,
-    unnecessary_transmutes
+    dead_code
 )]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
+
+// explicitly require presence of some symbols to check if the bindings worked
+pub use generated::{ssl_compliance_policy_t, ERR_add_error_data, SSL_set1_groups}; // if these are missing, your include path is incorrect or has a wrong version of boringssl
+pub use generated::{BIO_new, OPENSSL_free, SSL_ERROR_NONE}; // if these are missing, your include path is incorrect
+#[cfg(feature = "fips")]
+pub use generated::{FIPS_mode, SSL_CTX_set_compliance_policy}; // your include path is incorrect or has a version of boringssl without FIPS support
+#[cfg(feature = "mlkem")]
+pub use generated::{MLKEM768_encap, MLKEM768_private_key_from_seed}; // your include path is incorrect or has a version of boringssl without mlkem support
+#[cfg(feature = "rpk")]
+pub use generated::{SSL_CREDENTIAL_new_raw_public_key, SSL_CREDENTIAL_set1_spki}; // your include path is incorrect or has a version of boringssl without rpk support
+
 pub use generated::*;
 
 #[cfg(target_pointer_width = "64")]

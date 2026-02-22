@@ -28,7 +28,7 @@ macro_rules! private_key_from_pem {
                 cvt_p($f(bio.as_ptr(),
                          ptr::null_mut(),
                          Some(crate::util::invoke_passwd_cb::<F>),
-                         &mut cb as *mut _ as *mut _))
+                         ptr::from_mut(&mut cb).cast()))
                     .map(|p| ::foreign_types::ForeignType::from_ptr(p))
             }
         }
@@ -60,12 +60,11 @@ macro_rules! private_key_to_pem {
         ) -> Result<Vec<u8>, crate::error::ErrorStack> {
             unsafe {
                 let bio = crate::bio::MemBio::new()?;
-                assert!(passphrase.len() <= ::libc::c_int::MAX as usize);
                 cvt($f(bio.as_ptr(),
                         self.as_ptr(),
                         cipher.as_ptr(),
                         passphrase.as_ptr() as *const _ as *mut _,
-                        passphrase.len() as ::libc::c_int,
+                        try_int(passphrase.len())?,
                         None,
                         ptr::null_mut()))?;
                 Ok(bio.get_buf().to_owned())
@@ -92,9 +91,9 @@ macro_rules! to_der {
         $(#[$m])*
         pub fn $n(&self) -> Result<Vec<u8>, crate::error::ErrorStack> {
             unsafe {
-                let len = crate::cvt($f(::foreign_types::ForeignTypeRef::as_ptr(self),
+                let len = crate::cvt_nz($f(::foreign_types::ForeignTypeRef::as_ptr(self),
                                         ptr::null_mut()))?;
-                let mut buf = vec![0; len as usize];
+                let mut buf = vec![0; len.get()];
                 crate::cvt($f(::foreign_types::ForeignTypeRef::as_ptr(self),
                               &mut buf.as_mut_ptr()))?;
                 Ok(buf)

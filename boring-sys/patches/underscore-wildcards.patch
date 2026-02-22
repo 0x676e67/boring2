@@ -1,4 +1,7 @@
-https://github.com/google/boringssl/compare/master...cloudflare:boringssl:underscore-wildcards
+From 2128aa4382ba668e2c4f77bf18da719b2ad0087e Mon Sep 17 00:00:00 2001
+From: Anthony Ramine <aramine@cloudflare.com>
+Date: Fri, 5 Dec 2025 08:19:56 +0100
+Subject: [PATCH] Introduce X509_CHECK_FLAG_UNDERSCORE_WILDCARDS
 
 --- a/src/crypto/x509v3/v3_utl.c
 +++ b/src/crypto/x509v3/v3_utl.c
@@ -53,8 +56,6 @@ https://github.com/google/boringssl/compare/master...cloudflare:boringssl:unders
  #define X509_CHECK_FLAG_SINGLE_LABEL_SUBDOMAINS 0
  // Skip the subject common name fallback if subjectAltNames is missing.
  #define X509_CHECK_FLAG_NEVER_CHECK_SUBJECT 0x20
-+// Allow underscores in DNS wildcard matches.
-+#define X509_CHECK_FLAG_UNDERSCORE_WILDCARDS 0x40
  
  OPENSSL_EXPORT int X509_check_host(X509 *x, const char *chk, size_t chklen,
                                     unsigned int flags, char **peername);

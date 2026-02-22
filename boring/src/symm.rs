@@ -54,14 +54,14 @@
 
 use crate::ffi;
 use foreign_types::ForeignTypeRef;
-use libc::{c_int, c_uint};
 use openssl_macros::corresponds;
 use std::cmp;
+use std::ffi::c_int;
 use std::ptr;
 
 use crate::error::ErrorStack;
 use crate::nid::Nid;
-use crate::{cvt, cvt_p};
+use crate::{cvt, cvt_p, try_int};
 
 #[derive(Copy, Clone)]
 pub enum Mode {
@@ -79,7 +79,7 @@ foreign_type_and_impl_send_sync! {
 impl CipherCtxRef {
     /// Configures CipherCtx for a fresh encryption operation using `cipher`.
     ///
-    /// https://commondatastorage.googleapis.com/chromium-boringssl-docs/cipher.h.html#EVP_EncryptInit_ex
+    #[corresponds(EVP_EncryptInit_ex)]
     pub fn init_encrypt(
         &mut self,
         cipher: &Cipher,
@@ -101,13 +101,12 @@ impl CipherCtxRef {
                 key.as_ptr(),
                 iv.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
     /// Configures CipherCtx for a fresh decryption operation using `cipher`.
     ///
-    /// https://commondatastorage.googleapis.com/chromium-boringssl-docs/cipher.h.html#EVP_DecryptInit_ex
+    #[corresponds(EVP_DecryptInit_ex)]
     pub fn init_decrypt(
         &mut self,
         cipher: &Cipher,
@@ -129,7 +128,6 @@ impl CipherCtxRef {
                 key.as_ptr(),
                 iv.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 }
@@ -139,7 +137,7 @@ impl CipherCtxRef {
 /// See OpenSSL doc at [`EVP_EncryptInit`] for more information on each algorithms.
 ///
 /// [`EVP_EncryptInit`]: https://www.openssl.org/docs/man1.1.0/crypto/EVP_EncryptInit.html
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Cipher(*const ffi::EVP_CIPHER);
 
 impl Cipher {
@@ -147,7 +145,7 @@ impl Cipher {
     #[corresponds(EVP_get_cipherbynid)]
     #[must_use]
     pub fn from_nid(nid: Nid) -> Option<Cipher> {
-        let ptr = unsafe { ffi::EVP_get_cipherbyname(ffi::OBJ_nid2sn(nid.as_raw())) };
+        let ptr = unsafe { ffi::EVP_get_cipherbynid(nid.as_raw()) };
         if ptr.is_null() {
             None
         } else {
@@ -303,6 +301,14 @@ impl Cipher {
     pub fn block_size(&self) -> usize {
         unsafe { EVP_CIPHER_block_size(self.0) as usize }
     }
+
+    /// Returns the cipher's NID.
+    #[corresponds(EVP_CIPHER_nid)]
+    pub fn nid(&self) -> Nid {
+        ffi::init();
+        let nid = unsafe { ffi::EVP_CIPHER_nid(self.as_ptr()) };
+        Nid::from_raw(nid)
+    }
 }
 
 unsafe impl Sync for Cipher {}
@@ -413,25 +419,22 @@ impl Crypter {
                 mode,
             ))?;
 
-            assert!(key.len() <= c_int::MAX as usize);
             cvt(ffi::EVP_CIPHER_CTX_set_key_length(
                 crypter.ctx,
-                key.len() as c_uint,
+                try_int(key.len())?,
             ))?;
 
-            let key = key.as_ptr() as *mut _;
             let iv = match (iv, t.iv_len()) {
                 (Some(iv), Some(len)) => {
                     if iv.len() != len {
-                        assert!(iv.len() <= c_int::MAX as usize);
                         cvt(ffi::EVP_CIPHER_CTX_ctrl(
                             crypter.ctx,
                             ffi::EVP_CTRL_GCM_SET_IVLEN,
-                            iv.len() as c_int,
+                            try_int(iv.len())?,
                             ptr::null_mut(),
                         ))?;
                     }
-                    iv.as_ptr() as *mut _
+                    iv.as_ptr().cast_mut()
                 }
                 (Some(_) | None, None) => ptr::null_mut(),
                 (None, Some(_)) => panic!("an IV is required for this cipher"),
@@ -440,7 +443,7 @@ impl Crypter {
                 crypter.ctx,
                 ptr::null(),
                 ptr::null_mut(),
-                key,
+                key.as_ptr().cast_mut(),
                 iv,
                 mode,
             ))?;
@@ -464,15 +467,13 @@ impl Crypter {
     /// When decrypting cipher text using an AEAD cipher, this must be called before `finalize`.
     pub fn set_tag(&mut self, tag: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(tag.len() <= c_int::MAX as usize);
             // NB: this constant is actually more general than just GCM.
             cvt(ffi::EVP_CIPHER_CTX_ctrl(
                 self.ctx,
                 ffi::EVP_CTRL_GCM_SET_TAG,
-                tag.len() as c_int,
-                tag.as_ptr() as *mut _,
+                try_int(tag.len())?,
+                tag.as_ptr().cast_mut().cast(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -482,15 +483,13 @@ impl Crypter {
     /// to use a value different than the default 12 bytes.
     pub fn set_tag_len(&mut self, tag_len: usize) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(tag_len <= c_int::MAX as usize);
             // NB: this constant is actually more general than just GCM.
             cvt(ffi::EVP_CIPHER_CTX_ctrl(
                 self.ctx,
                 ffi::EVP_CTRL_GCM_SET_TAG,
-                tag_len as c_int,
+                try_int(tag_len)?,
                 ptr::null_mut(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -500,16 +499,14 @@ impl Crypter {
     /// CCM mode.
     pub fn set_data_len(&mut self, data_len: usize) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(data_len <= c_int::MAX as usize);
             let mut len = 0;
             cvt(ffi::EVP_CipherUpdate(
                 self.ctx,
                 ptr::null_mut(),
                 &mut len,
                 ptr::null_mut(),
-                data_len as c_int,
+                try_int(data_len)?,
             ))
-            .map(|_| ())
         }
     }
 
@@ -520,16 +517,14 @@ impl Crypter {
     /// `update`.
     pub fn aad_update(&mut self, input: &[u8]) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(input.len() <= c_int::MAX as usize);
             let mut len = 0;
             cvt(ffi::EVP_CipherUpdate(
                 self.ctx,
                 ptr::null_mut(),
                 &mut len,
                 input.as_ptr(),
-                input.len() as c_int,
+                try_int(input.len())?,
             ))
-            .map(|_| ())
         }
     }
 
@@ -545,8 +540,6 @@ impl Crypter {
     ///
     /// Panics for block ciphers if `output.len() < input.len() + block_size`,
     /// where `block_size` is the block size of the cipher (see `Cipher::block_size`).
-    ///
-    /// Panics if `output.len() > c_int::MAX`.
     pub fn update(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, ErrorStack> {
         unsafe {
             let block_size = if self.block_size > 1 {
@@ -555,16 +548,14 @@ impl Crypter {
                 0
             };
             assert!(output.len() >= input.len() + block_size);
-            assert!(output.len() <= c_int::MAX as usize);
-            let mut outl = output.len() as c_int;
-            let inl = input.len() as c_int;
+            let mut outl = try_int(output.len())?;
 
             cvt(ffi::EVP_CipherUpdate(
                 self.ctx,
                 output.as_mut_ptr(),
                 &mut outl,
                 input.as_ptr(),
-                inl,
+                try_int(input.len())?,
             ))?;
 
             Ok(outl as usize)
@@ -609,14 +600,12 @@ impl Crypter {
     /// bytes, for example.
     pub fn get_tag(&self, tag: &mut [u8]) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(tag.len() <= c_int::MAX as usize);
             cvt(ffi::EVP_CIPHER_CTX_ctrl(
                 self.ctx,
                 ffi::EVP_CTRL_GCM_GET_TAG,
-                tag.len() as c_int,
-                tag.as_mut_ptr() as *mut _,
+                try_int(tag.len())?,
+                tag.as_mut_ptr().cast(),
             ))
-            .map(|_| ())
         }
     }
 }
@@ -1050,5 +1039,130 @@ mod tests {
         )
         .unwrap();
         assert_eq!(pt, hex::encode(out));
+    }
+
+    #[test]
+    fn test_nid_roundtrip() {
+        for cipher in [
+            Cipher::aes_128_gcm(),
+            Cipher::aes_192_gcm(),
+            Cipher::aes_256_gcm(),
+            Cipher::aes_128_ecb(),
+            Cipher::aes_128_cbc(),
+            Cipher::aes_128_ctr(),
+            Cipher::aes_128_ofb(),
+            Cipher::aes_192_ecb(),
+            Cipher::aes_192_cbc(),
+            Cipher::aes_192_ctr(),
+            Cipher::aes_192_ofb(),
+            Cipher::aes_256_ecb(),
+            Cipher::aes_256_cbc(),
+            Cipher::aes_256_ctr(),
+            Cipher::aes_256_ofb(),
+            Cipher::des_ecb(),
+            Cipher::des_ede3_cbc(),
+            Cipher::des_cbc(),
+            Cipher::rc4(),
+        ] {
+            let name = cipher.nid().short_name().unwrap_or("unknown");
+            assert_eq!(Cipher::from_nid(cipher.nid()), Some(cipher), "{}", name);
+        }
+
+        assert_eq!(Cipher::from_nid(Cipher::des_ede3().nid()), None);
+    }
+
+    // Make sure the NIDs don't actually change upstream.
+    #[test]
+    fn test_nid_regression() {
+        struct TestCase {
+            cipher: Cipher,
+            nid: c_int,
+        }
+
+        for t in [
+            TestCase {
+                cipher: Cipher::aes_128_ecb(),
+                nid: 418,
+            },
+            TestCase {
+                cipher: Cipher::aes_128_cbc(),
+                nid: 419,
+            },
+            TestCase {
+                cipher: Cipher::aes_128_ctr(),
+                nid: 904,
+            },
+            TestCase {
+                cipher: Cipher::aes_128_gcm(),
+                nid: 895,
+            },
+            TestCase {
+                cipher: Cipher::aes_128_ofb(),
+                nid: 420,
+            },
+            TestCase {
+                cipher: Cipher::aes_192_ecb(),
+                nid: 422,
+            },
+            TestCase {
+                cipher: Cipher::aes_192_cbc(),
+                nid: 423,
+            },
+            TestCase {
+                cipher: Cipher::aes_192_ctr(),
+                nid: 905,
+            },
+            TestCase {
+                cipher: Cipher::aes_192_gcm(),
+                nid: 898,
+            },
+            TestCase {
+                cipher: Cipher::aes_192_ofb(),
+                nid: 424,
+            },
+            TestCase {
+                cipher: Cipher::aes_256_ecb(),
+                nid: 426,
+            },
+            TestCase {
+                cipher: Cipher::aes_256_cbc(),
+                nid: 427,
+            },
+            TestCase {
+                cipher: Cipher::aes_256_ctr(),
+                nid: 906,
+            },
+            TestCase {
+                cipher: Cipher::aes_256_gcm(),
+                nid: 901,
+            },
+            TestCase {
+                cipher: Cipher::aes_256_ofb(),
+                nid: 428,
+            },
+            TestCase {
+                cipher: Cipher::des_ecb(),
+                nid: 29,
+            },
+            TestCase {
+                cipher: Cipher::des_ede3_cbc(),
+                nid: 44,
+            },
+            TestCase {
+                cipher: Cipher::des_cbc(),
+                nid: 31,
+            },
+            TestCase {
+                cipher: Cipher::rc4(),
+                nid: 5,
+            },
+            TestCase {
+                cipher: Cipher::des_ede3(),
+                nid: 33,
+            },
+        ] {
+            let name = t.cipher.nid().short_name().unwrap_or("unknown");
+            assert_eq!(t.cipher.nid().as_raw(), t.nid, "{}", name);
+        }
     }
 }

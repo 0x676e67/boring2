@@ -60,7 +60,7 @@ fn test_verify_cert() {
     assert_eq!(
         Ok(()),
         verify(&leaf, &[&root1], &[&intermediate, &root1_cross], |param| {
-            param.clear_flags(X509VerifyFlags::TRUSTED_FIRST)
+            param.clear_flags(X509VerifyFlags::TRUSTED_FIRST);
         })
     );
 }
@@ -75,7 +75,7 @@ fn verify(
         let mut builder = X509StoreBuilder::new().unwrap();
 
         for cert in trusted {
-            builder.add_cert((**cert).to_owned()).unwrap();
+            builder.add_cert(cert).unwrap();
         }
 
         builder.build()

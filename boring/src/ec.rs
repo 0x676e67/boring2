@@ -15,7 +15,6 @@
 //! [`EcGroup`]: struct.EcGroup.html
 //! [`Nid`]: ../nid/struct.Nid.html
 //! [Eliptic Curve Cryptography]: https://wiki.openssl.org/index.php/Elliptic_Curve_Cryptography
-use crate::ffi;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use libc::c_int;
 use openssl_macros::corresponds;
@@ -24,8 +23,10 @@ use std::ptr;
 
 use crate::bn::{BigNumContextRef, BigNumRef};
 use crate::error::ErrorStack;
+use crate::ffi;
 use crate::nid::Nid;
 use crate::pkey::{HasParams, HasPrivate, HasPublic, Params, Private, Public};
+use crate::try_int;
 use crate::{cvt, cvt_n, cvt_p, init};
 
 /// Compressed or Uncompressed conversion
@@ -143,7 +144,6 @@ impl EcGroupRef {
                 b.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -160,7 +160,6 @@ impl EcGroupRef {
                 cofactor.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -185,7 +184,7 @@ impl EcGroupRef {
     pub fn generator(&self) -> &EcPointRef {
         unsafe {
             let ptr = ffi::EC_GROUP_get0_generator(self.as_ptr());
-            EcPointRef::from_ptr(ptr as *mut _)
+            EcPointRef::from_ptr(ptr.cast_mut())
         }
     }
 
@@ -202,7 +201,6 @@ impl EcGroupRef {
                 order.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -260,7 +258,6 @@ impl EcPointRef {
                 b.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -271,8 +268,7 @@ impl EcPointRef {
         group: &EcGroupRef,
         q: &EcPointRef,
         m: &BigNumRef,
-        // FIXME should be &mut
-        ctx: &BigNumContextRef,
+        ctx: &mut BigNumContextRef,
     ) -> Result<(), ErrorStack> {
         unsafe {
             cvt(ffi::EC_POINT_mul(
@@ -283,7 +279,6 @@ impl EcPointRef {
                 m.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -292,8 +287,7 @@ impl EcPointRef {
         &mut self,
         group: &EcGroupRef,
         n: &BigNumRef,
-        // FIXME should be &mut
-        ctx: &BigNumContextRef,
+        ctx: &mut BigNumContextRef,
     ) -> Result<(), ErrorStack> {
         unsafe {
             cvt(ffi::EC_POINT_mul(
@@ -304,7 +298,6 @@ impl EcPointRef {
                 ptr::null(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -326,7 +319,6 @@ impl EcPointRef {
                 m.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -339,7 +331,6 @@ impl EcPointRef {
                 self.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -428,7 +419,6 @@ impl EcPointRef {
                 y.as_ptr(),
                 ctx.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 }
@@ -506,7 +496,7 @@ where
     pub fn private_key(&self) -> &BigNumRef {
         unsafe {
             let ptr = ffi::EC_KEY_get0_private_key(self.as_ptr());
-            BigNumRef::from_ptr(ptr as *mut _)
+            BigNumRef::from_ptr(ptr.cast_mut())
         }
     }
 }
@@ -521,7 +511,7 @@ where
     pub fn public_key(&self) -> &EcPointRef {
         unsafe {
             let ptr = ffi::EC_KEY_get0_public_key(self.as_ptr());
-            EcPointRef::from_ptr(ptr as *mut _)
+            EcPointRef::from_ptr(ptr.cast_mut())
         }
     }
 
@@ -552,14 +542,14 @@ where
     pub fn group(&self) -> &EcGroupRef {
         unsafe {
             let ptr = ffi::EC_KEY_get0_group(self.as_ptr());
-            EcGroupRef::from_ptr(ptr as *mut _)
+            EcGroupRef::from_ptr(ptr.cast_mut())
         }
     }
 
     /// Checks the key for validity.
     #[corresponds(EC_KEY_check_key)]
     pub fn check_key(&self) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::EC_KEY_check_key(self.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::EC_KEY_check_key(self.as_ptr())) }
     }
 }
 
@@ -847,7 +837,7 @@ mod test {
         let mut ctx = BigNumContext::new().unwrap();
         let mut public_key = EcPoint::new(&group).unwrap();
         public_key
-            .mul_generator(&group, key.private_key(), &ctx)
+            .mul_generator(&group, key.private_key(), &mut ctx)
             .unwrap();
         assert!(public_key.eq(&group, key.public_key(), &mut ctx).unwrap());
     }
@@ -859,7 +849,7 @@ mod test {
         let one = BigNum::from_u32(1).unwrap();
         let mut ctx = BigNumContext::new().unwrap();
         let mut ecp = EcPoint::new(&group).unwrap();
-        ecp.mul_generator(&group, &one, &ctx).unwrap();
+        ecp.mul_generator(&group, &one, &mut ctx).unwrap();
         assert!(ecp.eq(&group, gen, &mut ctx).unwrap());
     }
 

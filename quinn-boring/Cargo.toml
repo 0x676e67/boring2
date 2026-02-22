@@ -8,7 +8,7 @@ repository = { workspace = true }
 description = "BoringSSL crypto provider for quinn"
 keywords = ["quic"]
 categories = ["network-programming", "asynchronous"]
-rust-version = "1.85"
+rust-version = { workspace = true }
 
 [badges]
 maintenance = { status = "passively-maintained" }

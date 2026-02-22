@@ -10,7 +10,9 @@ pub(crate) struct Config {
     pub(crate) target: String,
     pub(crate) target_arch: String,
     pub(crate) target_os: String,
+    pub(crate) unix: bool,
     pub(crate) target_env: String,
+    pub(crate) target_features: Vec<String>,
     pub(crate) features: Features,
     pub(crate) env: Env,
 }
@@ -49,6 +51,13 @@ impl Config {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
         let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
         let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
+        let unix = env::var("CARGO_CFG_UNIX").is_ok();
+
+        let target_features = env::var("CARGO_CFG_TARGET_FEATURE")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.to_owned())
+            .collect();
 
         let features = Features::from_env();
         let env = Env::from_env(&host, &target, features.is_fips_like());
@@ -66,7 +75,9 @@ impl Config {
             target,
             target_arch,
             target_os,
+            unix,
             target_env,
+            target_features,
             features,
             env,
         };

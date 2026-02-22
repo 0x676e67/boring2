@@ -101,12 +101,11 @@ extern crate libc;
 #[cfg(test)]
 extern crate hex;
 
-use std::ffi::{c_long, c_void};
+use std::ffi::{c_int, c_long, c_void};
+use std::num::NonZeroUsize;
 
 #[doc(inline)]
 pub use crate::ffi::init;
-
-use libc::{c_int, size_t};
 
 use crate::error::ErrorStack;
 
@@ -133,6 +132,8 @@ pub mod hash;
 pub mod hmac;
 pub mod hpke;
 pub mod memcmp;
+#[cfg(feature = "mlkem")]
+pub mod mlkem;
 pub mod nid;
 pub mod pkcs12;
 pub mod pkcs5;
@@ -157,11 +158,11 @@ fn cvt_p<T>(r: *mut T) -> Result<*mut T, ErrorStack> {
     }
 }
 
-fn cvt_0(r: size_t) -> Result<size_t, ErrorStack> {
+fn cvt_0(r: usize) -> Result<(), ErrorStack> {
     if r == 0 {
         Err(ErrorStack::get())
     } else {
-        Ok(r)
+        Ok(())
     }
 }
 
@@ -173,12 +174,19 @@ fn cvt_0i(r: c_int) -> Result<c_int, ErrorStack> {
     }
 }
 
-fn cvt(r: c_int) -> Result<c_int, ErrorStack> {
+fn cvt(r: c_int) -> Result<(), ErrorStack> {
     if r <= 0 {
         Err(ErrorStack::get())
     } else {
-        Ok(r)
+        Ok(())
     }
+}
+
+fn cvt_nz(r: c_int) -> Result<NonZeroUsize, ErrorStack> {
+    usize::try_from(r)
+        .ok()
+        .and_then(NonZeroUsize::new)
+        .ok_or_else(ErrorStack::get)
 }
 
 fn cvt_n(r: c_int) -> Result<c_int, ErrorStack> {
@@ -187,6 +195,15 @@ fn cvt_n(r: c_int) -> Result<c_int, ErrorStack> {
     } else {
         Ok(r)
     }
+}
+
+fn try_int<F, T>(from: F) -> Result<T, ErrorStack>
+where
+    F: TryInto<T> + Send + Sync + Copy + 'static,
+    T: Send + Sync + Copy + 'static,
+{
+    from.try_into()
+        .map_err(|_| ErrorStack::internal_error_str("int overflow"))
 }
 
 unsafe extern "C" fn free_data_box<T>(
@@ -198,6 +215,6 @@ unsafe extern "C" fn free_data_box<T>(
     _argp: *mut c_void,
 ) {
     if !ptr.is_null() {
-        drop(Box::<T>::from_raw(ptr as *mut T));
+        drop(Box::<T>::from_raw(ptr.cast::<T>()));
     }
 }

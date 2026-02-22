@@ -1,11 +1,11 @@
 use crate::ffi;
-use libc::{c_int, c_uint};
+use std::ffi::c_int;
 use std::ptr;
 
-use crate::cvt;
 use crate::error::ErrorStack;
 use crate::hash::MessageDigest;
 use crate::symm::Cipher;
+use crate::{cvt, cvt_nz, try_int};
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct KeyIvPair {
@@ -49,7 +49,7 @@ pub fn bytes_to_key(
         let cipher = cipher.as_ptr();
         let digest = digest.as_ptr();
 
-        let len = cvt(ffi::EVP_BytesToKey(
+        let len = cvt_nz(ffi::EVP_BytesToKey(
             cipher,
             digest,
             salt_ptr,
@@ -60,7 +60,7 @@ pub fn bytes_to_key(
             ptr::null_mut(),
         ))?;
 
-        let mut key = vec![0; len as usize];
+        let mut key = vec![0; len.get()];
         let iv_ptr = iv
             .as_mut()
             .map(|v| v.as_mut_ptr())
@@ -90,22 +90,18 @@ pub fn pbkdf2_hmac(
     key: &mut [u8],
 ) -> Result<(), ErrorStack> {
     unsafe {
-        assert!(pass.len() <= c_int::MAX as usize);
-        assert!(salt.len() <= c_int::MAX as usize);
-        assert!(key.len() <= c_int::MAX as usize);
-
         ffi::init();
+
         cvt(ffi::PKCS5_PBKDF2_HMAC(
-            pass.as_ptr() as *const _,
+            pass.as_ptr().cast(),
             pass.len(),
             salt.as_ptr(),
             salt.len(),
-            iter as c_uint,
+            try_int(iter)?,
             hash.as_ptr(),
             key.len(),
             key.as_mut_ptr(),
         ))
-        .map(|_| ())
     }
 }
 
@@ -122,18 +118,17 @@ pub fn scrypt(
     unsafe {
         ffi::init();
         cvt(ffi::EVP_PBE_scrypt(
-            pass.as_ptr() as *const _,
+            pass.as_ptr().cast(),
             pass.len(),
-            salt.as_ptr() as *const _,
+            salt.as_ptr().cast(),
             salt.len(),
             n,
             r,
             p,
             maxmem,
-            key.as_mut_ptr() as *mut _,
+            key.as_mut_ptr(),
             key.len(),
         ))
-        .map(|_| ())
     }
 }
 

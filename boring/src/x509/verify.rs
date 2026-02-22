@@ -120,10 +120,9 @@ impl X509VerifyParamRef {
             let raw_host = if host.is_empty() { "\0" } else { host };
             cvt(ffi::X509_VERIFY_PARAM_set1_host(
                 self.as_ptr(),
-                raw_host.as_ptr() as *const _,
+                raw_host.as_ptr().cast(),
                 host.len(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -135,10 +134,9 @@ impl X509VerifyParamRef {
             let raw_email = if email.is_empty() { "\0" } else { email };
             cvt(ffi::X509_VERIFY_PARAM_set1_email(
                 self.as_ptr(),
-                raw_email.as_ptr() as *const _,
+                raw_email.as_ptr().cast(),
                 email.len(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -159,10 +157,9 @@ impl X509VerifyParamRef {
             };
             cvt(ffi::X509_VERIFY_PARAM_set1_ip(
                 self.as_ptr(),
-                buf.as_ptr() as *const _,
+                buf.as_ptr().cast(),
                 len,
             ))
-            .map(|_| ())
         }
     }
 
@@ -183,6 +180,6 @@ impl X509VerifyParamRef {
     /// If a parameter is unset in `src`, the existing value in `self`` is preserved.
     #[corresponds(X509_VERIFY_PARAM_set1)]
     pub fn copy_from(&mut self, src: &Self) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_VERIFY_PARAM_set1(self.as_ptr(), src.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_VERIFY_PARAM_set1(self.as_ptr(), src.as_ptr())) }
     }
 }

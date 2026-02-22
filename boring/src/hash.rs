@@ -1,7 +1,5 @@
-use crate::ffi;
 use openssl_macros::corresponds;
-use std::convert::TryInto;
-use std::ffi::{c_uint, c_void};
+use std::ffi::c_uint;
 use std::fmt;
 use std::io;
 use std::io::prelude::*;
@@ -9,8 +7,10 @@ use std::ops::{Deref, DerefMut};
 use std::ptr;
 
 use crate::error::ErrorStack;
+use crate::ffi;
 use crate::ffi::{EVP_MD_CTX_free, EVP_MD_CTX_new};
 use crate::nid::Nid;
+use crate::try_int;
 use crate::{cvt, cvt_p};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -196,7 +196,7 @@ impl Hasher {
         unsafe {
             cvt(ffi::EVP_DigestUpdate(
                 self.ctx,
-                data.as_ptr() as *mut _,
+                data.as_ptr().cast_mut().cast(),
                 data.len(),
             ))?;
         }
@@ -210,7 +210,7 @@ impl Hasher {
             self.init()?;
         }
         unsafe {
-            let mut len = ffi::EVP_MAX_MD_SIZE.try_into().unwrap();
+            let mut len = try_int(ffi::EVP_MAX_MD_SIZE)?;
             let mut buf = [0; ffi::EVP_MAX_MD_SIZE as usize];
             cvt(ffi::EVP_DigestFinal_ex(
                 self.ctx,
@@ -220,7 +220,7 @@ impl Hasher {
             self.state = Finalized;
             Ok(DigestBytes {
                 buf,
-                len: len as usize,
+                len: try_int(len)?,
             })
         }
     }
@@ -359,7 +359,7 @@ pub fn hmac_sha1(key: &[u8], data: &[u8]) -> Result<[u8; 20], ErrorStack> {
     hmac(MessageDigest::sha1(), key, data)
 }
 
-fn hmac<const N: usize>(
+pub(crate) fn hmac<const N: usize>(
     digest: MessageDigest,
     key: &[u8],
     data: &[u8],
@@ -370,7 +370,7 @@ fn hmac<const N: usize>(
     cvt_p(unsafe {
         ffi::HMAC(
             digest.as_ptr(),
-            key.as_ptr() as *const c_void,
+            key.as_ptr().cast(),
             key.len(),
             data.as_ptr(),
             data.len(),

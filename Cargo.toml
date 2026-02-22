@@ -11,6 +11,7 @@ resolver = "2"
 version = "5.0.0-alpha.13"
 repository = "https://github.com/0x676e67/boring2"
 edition = "2021"
+rust-version = "1.85"
 
 [workspace.metadata.release]
 pre-release-commit-message = "Release {{version}}"

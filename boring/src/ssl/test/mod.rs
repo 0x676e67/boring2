@@ -12,11 +12,11 @@ use crate::hash::MessageDigest;
 use crate::pkey::PKey;
 use crate::srtp::SrtpProfileId;
 use crate::ssl::test::server::Server;
-use crate::ssl::SslVersion;
 use crate::ssl::{
     self, ExtensionType, ShutdownResult, ShutdownState, Ssl, SslAcceptor, SslAcceptorBuilder,
     SslConnector, SslContext, SslFiletype, SslMethod, SslOptions, SslStream, SslVerifyMode,
 };
+use crate::ssl::{HandshakeError, SslVersion};
 use crate::x509::store::X509StoreBuilder;
 use crate::x509::verify::X509CheckFlags;
 use crate::x509::{X509Name, X509};
@@ -327,8 +327,8 @@ fn test_mutable_store() {
     assert_eq!(1, ctx.cert_store().objects_len());
 
     let mut new_store = X509StoreBuilder::new().unwrap();
-    new_store.add_cert(cert).unwrap();
-    new_store.add_cert(cert2).unwrap();
+    new_store.add_cert(&cert).unwrap();
+    new_store.add_cert(&cert2).unwrap();
     let new_store = new_store.build();
     assert_eq!(2, new_store.objects_len());
 
@@ -415,6 +415,68 @@ fn test_select_cert_alpn_extension() {
         alpn_extension.lock().unwrap().as_deref(),
         Some(&b"\x00\x07\x06http/2"[..]),
     );
+}
+
+#[test]
+fn test_io_retry() {
+    #[derive(Debug)]
+    struct RetryStream {
+        inner: TcpStream,
+        first_read: bool,
+        first_write: bool,
+        first_flush: bool,
+    }
+
+    impl Read for RetryStream {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if mem::replace(&mut self.first_read, false) {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, "first read"))
+            } else {
+                self.inner.read(buf)
+            }
+        }
+    }
+
+    impl Write for RetryStream {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if mem::replace(&mut self.first_write, false) {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, "first write"))
+            } else {
+                self.inner.write(buf)
+            }
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            if mem::replace(&mut self.first_flush, false) {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, "first flush"))
+            } else {
+                self.inner.flush()
+            }
+        }
+    }
+
+    let server = Server::builder().build();
+
+    let stream = RetryStream {
+        inner: server.connect_tcp(),
+        first_read: true,
+        first_write: true,
+        first_flush: true,
+    };
+
+    let ctx = SslContext::builder(SslMethod::tls()).unwrap();
+    let mut s = match Ssl::new(&ctx.build()).unwrap().connect(stream) {
+        Ok(mut s) => return s.read_exact(&mut [0]).unwrap(),
+        Err(HandshakeError::WouldBlock(s)) => s,
+        Err(_) => panic!("should not fail on setup"),
+    };
+    loop {
+        match s.handshake() {
+            Ok(mut s) => return s.read_exact(&mut [0]).unwrap(),
+            Err(HandshakeError::WouldBlock(mid_s)) => s = mid_s,
+            Err(_) => panic!("should not fail on handshake"),
+        }
+    }
 }
 
 #[test]
@@ -1010,7 +1072,7 @@ fn test_set_compliance() {
     assert_eq!(ciphers.len(), FIPS_CIPHERS.len());
 
     for cipher in ciphers.into_iter().zip(FIPS_CIPHERS) {
-        assert_eq!(cipher.0.name(), cipher.1)
+        assert_eq!(cipher.0.name(), cipher.1);
     }
 
     let mut ctx = SslContext::builder(SslMethod::tls()).unwrap();
@@ -1029,7 +1091,7 @@ fn test_set_compliance() {
     assert_eq!(ciphers.len(), WPA3_192_CIPHERS.len());
 
     for cipher in ciphers.into_iter().zip(WPA3_192_CIPHERS) {
-        assert_eq!(cipher.0.name(), cipher.1)
+        assert_eq!(cipher.0.name(), cipher.1);
     }
 
     ctx.set_compliance_policy(CompliancePolicy::NONE)
@@ -1092,7 +1154,7 @@ fn test_ssl_set_compliance() {
     assert_eq!(ciphers.len(), FIPS_CIPHERS.len());
 
     for cipher in ciphers.into_iter().zip(FIPS_CIPHERS) {
-        assert_eq!(cipher.0.name(), cipher.1)
+        assert_eq!(cipher.0.name(), cipher.1);
     }
 
     let ctx = SslContext::builder(SslMethod::tls()).unwrap().build();
@@ -1112,7 +1174,7 @@ fn test_ssl_set_compliance() {
     assert_eq!(ciphers.len(), WPA3_192_CIPHERS.len());
 
     for cipher in ciphers.into_iter().zip(WPA3_192_CIPHERS) {
-        assert_eq!(cipher.0.name(), cipher.1)
+        assert_eq!(cipher.0.name(), cipher.1);
     }
 
     ssl.set_compliance_policy(CompliancePolicy::NONE)

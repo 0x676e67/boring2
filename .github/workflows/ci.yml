@@ -5,10 +5,10 @@ on:
     tags: ["v*"]
   pull_request:
     paths-ignore:
-      - 'docs/**'
-      - '*.md'
-      - '.github/**'
-      - 'README.md'
+      - "docs/**"
+      - "*.md"
+      - ".github/**"
+      - "README.md"
   workflow_dispatch:
 
 env:
@@ -35,23 +35,27 @@ jobs:
   clippy:
     name: clippy
     runs-on: ubuntu-latest
+    env:
+      CARGO_HOME: ${{ github.workspace }}/.cache/cargo
     steps:
       - uses: actions/checkout@v6
         with:
-          submodules: 'recursive'
+          submodules: "recursive"
       - name: Install Rust
         run: rustup toolchain add stable --no-self-update --component clippy && rustup default stable
       - name: Get rust version
         id: rust-version
+        shell: bash
         run: |
           echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
       - name: Cache cargo index
         uses: actions/cache@v5
         with:
           path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
+            .cache/cargo/registry/index
+            .cache/cargo/registry/cache
           key: index-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.toml') }}
+          enableCrossOsArchive: true
       - name: Fetch dependencies
         run: cargo fetch
       - name: Cache target directory
@@ -60,212 +64,277 @@ jobs:
           path: target
           key: clippy-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.lock') }}
       - name: Run clippy
-        run: cargo clippy --all --all-targets
+        run: cargo clippy --all --all-targets --features rpk,mlkem
       - name: Check docs
         run: cargo doc --no-deps -p boring2 -p boring-sys2 --features underscore-wildcards
         env:
+          CARGO_BUILD_RUSTDOCFLAGS: "--cfg=docsrs"
+          RUSTC_BOOTSTRAP: 1
           DOCS_RS: 1
+      - name: Cargo.toml boring versions consistency
+        shell: bash
+        run: |
+          WORKSPACE_VERSION=$(grep -F '[workspace.package]' -A1 Cargo.toml | grep -F version | grep -Eo '".*"')
+          if [[ -z "$WORKSPACE_VERSION" ]]; then echo 2>&1 "error: can't find boring version"; exit 1; fi
+          if grep -E 'boring.* =' Cargo.toml | grep -vF "$WORKSPACE_VERSION"; then
+            echo 2>&1 "error: boring dependencies must match workspace version $WORKSPACE_VERSION"
+            exit 1
+          fi
   test:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         thing:
-        - stable
-        - arm-android
-        - arm64-android
-        - i686-android
-        - x86_64-android
-        - aarch64-ios
-        - aarch64-ios-sim
-        - x86_64-ios
-        - i686-linux
-        - arm-linux
-        - aarch64-linux
-        - arm64-macos
-        - x86_64-macos
-        - x86_64-mingw
-        - i686-msvc
-        - x86_64-msvc
+          - stable
+          - i686-mingw
+          - arm-android
+          - arm64-android
+          - i686-android
+          - x86_64-android
+          - aarch64-ios
+          - aarch64-ios-sim
+          - x86_64-ios
+          - i686-linux
+          - arm-linux
+          - aarch64-linux
+          - arm64-macos
+          - x86_64-macos
+          - x86_64-mingw
+          - i686-msvc
+          - x86_64-msvc
         include:
-        - check_only: false
-        - extra_test_args: ''
-        - apt_packages: ''
-        - custom_env: {}
-        - thing: stable
-          target: x86_64-unknown-linux-gnu
-          rust: stable
-          os: ubuntu-latest
-        - thing: arm-android
-          target: armv7-linux-androideabi
-          rust: stable
-          os: ubuntu-latest
-          check_only: true
-          extra_test_args: --workspace --exclude quinn-boring2
-        - thing: arm64-android
-          target: aarch64-linux-android
-          rust: stable
-          os: ubuntu-latest
-          check_only: true
-          extra_test_args: --workspace --exclude quinn-boring2
-        - thing: i686-android
-          target: i686-linux-android
-          rust: stable
-          os: ubuntu-latest
-          check_only: true
-          extra_test_args: --workspace --exclude quinn-boring2
-        - thing: x86_64-android
-          target: x86_64-linux-android
-          rust: stable
-          os: ubuntu-latest
-          check_only: true
-          extra_test_args: --workspace --exclude quinn-boring2
-        - thing: aarch64-ios
-          target: aarch64-apple-ios
-          os: macos-latest
-          check_only: true
-          custom_env:
-            IPHONEOS_DEPLOYMENT_TARGET: 17.5
-          # It's... theoretically possible to run tests on iPhone Simulator,
-          # but for now, make sure that BoringSSL only builds.
-        - thing: aarch64-ios-sim
-          target: aarch64-apple-ios-sim
-          os: macos-latest
-          check_only: true
-          custom_env:
-            IPHONEOS_DEPLOYMENT_TARGET: 17.5
-        - thing: x86_64-ios
-          target: x86_64-apple-ios
-          os: macos-latest
-          check_only: true
-          custom_env:
-            IPHONEOS_DEPLOYMENT_TARGET: 17.5
-        - thing: i686-linux
-          target: i686-unknown-linux-gnu
-          rust: stable
-          os: ubuntu-latest
-          apt_packages: gcc-multilib g++-multilib
-        - thing: arm-linux
-          target: arm-unknown-linux-gnueabi
-          rust: stable
-          os: ubuntu-latest
-          apt_packages: gcc-arm-linux-gnueabi g++-arm-linux-gnueabi
-          check_only: true
-          custom_env:
-            CC_arm-unknown-linux-gnueabi: arm-linux-gnueabi-gcc
-            CXX_arm-unknown-linux-gnueabi: arm-linux-gnueabi-g++
-            CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABI_LINKER: arm-linux-gnueabi-g++
-        - thing: aarch64-linux
-          target: aarch64-unknown-linux-gnu
-          rust: stable
-          os: ubuntu-latest
-          apt_packages: crossbuild-essential-arm64
-          check_only: true
-          custom_env:
-            CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-            CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
-            CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-g++
-        - thing: arm64-macos
-          target: aarch64-apple-darwin
-          rust: stable
-          os: macos-latest
-          check_only: true
-        - thing: x86_64-macos
-          target: x86_64-apple-darwin
-          rust: stable
-          os: macos-latest
-        - thing: x86_64-mingw
-          target: x86_64-pc-windows-gnu
-          rust: stable
-          os: windows-latest
-          check_only: true # tests are flaky for unclear reasons
-          custom_env:
-            CC: gcc
-            CXX: g++
-            C_INCLUDE_PATH: "C:\\msys64\\usr\\include"
-            CPLUS_INCLUDE_PATH: "C:\\msys64\\usr\\include"
-            LIBRARY_PATH: "C:\\msys64\\usr\\lib"
-          # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring2
-        - thing: i686-msvc
-          target: i686-pc-windows-msvc
-          rust: stable-x86_64-msvc
-          os: windows-latest
-          # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring2
-        - thing: x86_64-msvc
-          target: x86_64-pc-windows-msvc
-          rust: stable-x86_64-msvc
-          os: windows-latest
-          # CI's Windows doesn't have required root certs
-          extra_test_args: --workspace --exclude tokio-boring2
+          - check_only: false
+          - extra_test_args: ""
+          - apt_packages: ""
+          - custom_env: {}
+          - thing: stable
+            target: x86_64-unknown-linux-gnu
+            rust: stable
+            os: ubuntu-latest
+          - thing: arm-android
+            target: armv7-linux-androideabi
+            rust: stable
+            os: ubuntu-latest
+            check_only: true
+            extra_test_args: --workspace --exclude quinn-boring2
+          - thing: arm64-android
+            target: aarch64-linux-android
+            rust: stable
+            os: ubuntu-latest
+            check_only: true
+            extra_test_args: --workspace --exclude quinn-boring2
+          - thing: i686-android
+            target: i686-linux-android
+            rust: stable
+            os: ubuntu-latest
+            check_only: true
+            extra_test_args: --workspace --exclude quinn-boring2
+          - thing: x86_64-android
+            target: x86_64-linux-android
+            rust: stable
+            os: ubuntu-latest
+            check_only: true
+            extra_test_args: --workspace --exclude quinn-boring2
+          - thing: aarch64-ios
+            target: aarch64-apple-ios
+            os: macos-latest
+            check_only: true
+            custom_env:
+              IPHONEOS_DEPLOYMENT_TARGET: 17.5
+            # It's... theoretically possible to run tests on iPhone Simulator,
+            # but for now, make sure that BoringSSL only builds.
+          - thing: aarch64-ios-sim
+            target: aarch64-apple-ios-sim
+            os: macos-latest
+            check_only: true
+            custom_env:
+              IPHONEOS_DEPLOYMENT_TARGET: 17.5
+          - thing: x86_64-ios
+            target: x86_64-apple-ios
+            os: macos-latest
+            check_only: true
+            custom_env:
+              IPHONEOS_DEPLOYMENT_TARGET: 17.5
+          - thing: i686-linux
+            target: i686-unknown-linux-gnu
+            rust: stable
+            os: ubuntu-latest
+            apt_packages: gcc-multilib g++-multilib
+            custom_env:
+              CXXFLAGS: -msse2
+          - thing: arm-linux
+            target: arm-unknown-linux-gnueabi
+            rust: stable
+            os: ubuntu-latest
+            apt_packages: gcc-arm-linux-gnueabi g++-arm-linux-gnueabi
+            check_only: true
+            custom_env:
+              CC_arm-unknown-linux-gnueabi: arm-linux-gnueabi-gcc
+              CXX_arm-unknown-linux-gnueabi: arm-linux-gnueabi-g++
+              CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABI_LINKER: arm-linux-gnueabi-g++
+          - thing: aarch64-linux
+            target: aarch64-unknown-linux-gnu
+            rust: stable
+            os: ubuntu-latest
+            apt_packages: crossbuild-essential-arm64
+            check_only: true
+            custom_env:
+              CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+              CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+              CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-g++
+          - thing: arm64-macos
+            target: aarch64-apple-darwin
+            rust: stable
+            os: macos-latest
+            check_only: true
+          - thing: x86_64-macos
+            target: x86_64-apple-darwin
+            rust: stable
+            os: macos-latest
+          - thing: x86_64-mingw
+            target: x86_64-pc-windows-gnu
+            rust: stable
+            os: windows-latest
+            check_only: true # tests are flaky for unclear reasons
+            custom_env:
+              CC: gcc
+              CXX: g++
+              C_INCLUDE_PATH: "C:\\msys64\\usr\\include"
+              CPLUS_INCLUDE_PATH: "C:\\msys64\\usr\\include"
+              LIBRARY_PATH: "C:\\msys64\\usr\\lib"
+              RUSTC_BOOTSTRAP: 1 # for -Z checksum-freshness
+            # CI's Windows doesn't have required root certs
+            extra_test_args: --workspace --exclude tokio-boring2
+          - thing: i686-msvc
+            target: i686-pc-windows-msvc
+            rust: stable-x86_64-msvc
+            os: windows-latest
+            custom_env:
+              RUSTC_BOOTSTRAP: 1 # for -Z checksum-freshness
+              CXXFLAGS: -msse2
+            # CI's Windows doesn't have required root certs
+            extra_test_args: --workspace --exclude tokio-boring2
+          - thing: x86_64-msvc
+            target: x86_64-pc-windows-msvc
+            rust: stable-x86_64-msvc
+            os: windows-latest
+            custom_env:
+              RUSTC_BOOTSTRAP: 1 # for -Z checksum-freshness
+            # CI's Windows doesn't have required root certs
+            extra_test_args: --workspace --exclude tokio-boring2
 
     steps:
-    - uses: actions/checkout@v6
-      with:
-        submodules: 'recursive'
-    # - name: Install Rust (rustup)
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+      # - name: Install Rust (rustup)
       # run: rustup update ${{ matrix.rust }} --no-self-update && rustup default ${{ matrix.rust }}
       # shell: bash
-    - run: rustup target add ${{ matrix.target }}
-    - name: Install golang
-      uses: actions/setup-go@v6
-      with:
-        go-version: '>=1.22.0'
-    - name: Install target-specific APT dependencies
-      if: "matrix.apt_packages != ''"
-      run: sudo apt update && sudo apt install -y ${{ matrix.apt_packages }}
-      shell: bash
-    - name: Install nasm
-      if: startsWith(matrix.os, 'windows')
-      run: choco install nasm
-      shell: cmd
-    - name: Install LLVM and Clang
-      if: startsWith(matrix.os, 'windows')
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: "11.0"
-        directory: ${{ runner.temp }}/llvm
-    - name: Set LIBCLANG_PATH
-      if: startsWith(matrix.os, 'windows')
-      run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
-    - name: Set Android Linker path
-      if: endsWith(matrix.thing, '-android')
-      run: echo "CARGO_TARGET_$(echo ${{ matrix.target }} | tr \\-a-z _A-Z)_LINKER=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/$(echo ${{ matrix.target }} | sed s/armv7/armv7a/)21-clang++" >> "$GITHUB_ENV"
-    - name: Get rust version
-      id: rust-version
-      run: |
-        echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
-    - name: Prepopulate cargo index
-      uses: actions/cache/restore@v5
-      with:
-        path: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
-        key: index-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.toml') }}
-    - name: Build tests
-      # We `build` because we want the linker to verify we are cross-compiling correctly for check-only targets.
-      run: cargo build --target ${{ matrix.target }} --tests ${{ matrix.extra_test_args }}
-      shell: bash
-      env: ${{ matrix.custom_env }}
-    - name: Run tests (skip=${{ matrix.check_only }})
-      if: "!matrix.check_only"
-      run: cargo test --target ${{ matrix.target }} ${{ matrix.extra_test_args }}
-      shell: bash
-      env: ${{ matrix.custom_env }}
-    - name: Test boring-sys2 cargo publish
-      # Running `cargo publish --dry-run` tests two things:
-      #
-      # 1. That `boring-sys2` can build BoringSSL with just the files included
-      #    in the crates.io package (as determined by the `include` field in
-      #    the `Cargo.toml`).
-      # 2. That the final `boring-sys2` package size, including the BoringSSL
-      #    submodules, is not too large to be published to `crates.io`.
-      #
-      # Both of these may no longer be the case after updating the BoringSSL
-      # submodules to a new revision, so it's important to test this on CI.
-      run: cargo publish --dry-run -p boring-sys2
-
+      - run: rustup target add ${{ matrix.target }}
+      - name: Install golang
+        uses: actions/setup-go@v6
+        with:
+          go-version: ">=1.22.0"
+      - name: Install target-specific APT dependencies
+        if: "matrix.apt_packages != ''"
+        run: sudo apt update && sudo apt install -y ${{ matrix.apt_packages }}
+        shell: bash
+      - name: Install nasm
+        if: startsWith(matrix.os, 'windows')
+        run: choco install nasm
+        shell: cmd
+      - name: Setup 32-bit MSYS2
+        if: matrix.thing == 'i686-mingw'
+        uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MINGW32
+          path-type: inherit
+          install: >-
+            mingw-w64-i686-gcc
+            mingw-w64-i686-cmake
+      - name: Setup 32-bit MSYS2 Env vars
+        if: matrix.thing == 'i686-mingw'
+        shell: bash
+        run: |
+          MSYS_ROOT='${{ steps.msys2.outputs.msys2-location }}'
+          test -d "$MSYS_ROOT\\mingw32\\bin"
+          echo >> $GITHUB_PATH "$MSYS_ROOT\\mingw32\\bin"
+          echo >> $GITHUB_PATH "$MSYS_ROOT\\usr\\bin"
+          echo >> $GITHUB_ENV CC="$MSYS_ROOT\\mingw32\\bin\\gcc"
+          echo >> $GITHUB_ENV CXX="$MSYS_ROOT\\mingw32\\bin\\g++"
+          echo >> $GITHUB_ENV AR="$MSYS_ROOT\\mingw32\\bin\\ar"
+          echo >> $GITHUB_ENV CFLAGS="-mlong-double-64 -I$MSYS_ROOT\\mingw32\\include"
+          echo >> $GITHUB_ENV CXXFLAGS="-mlong-double-64 -I$MSYS_ROOT\\mingw32\\include"
+          echo >> $GITHUB_ENV BINDGEN_EXTRA_CLANG_ARGS="-mlong-double-64 -I$MSYS_ROOT\\mingw32\\include"
+          echo >> $GITHUB_ENV LIBRARY_PATH="$MSYS_ROOT\\mingw32\\lib"
+          echo >> $GITHUB_ENV LDFLAGS="-L$MSYS_ROOT\\mingw32\\lib"
+      - name: Install LLVM and Clang
+        if: startsWith(matrix.os, 'windows')
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "11.0"
+          directory: ${{ runner.temp }}/llvm
+      - name: Set LIBCLANG_PATH
+        if: startsWith(matrix.os, 'windows')
+        run: echo "LIBCLANG_PATH=$((gcm clang).source -replace "clang.exe")" >> $env:GITHUB_ENV
+      - name: Set Android Linker path
+        if: endsWith(matrix.thing, '-android')
+        run: echo "CARGO_TARGET_$(echo ${{ matrix.target }} | tr \\-a-z _A-Z)_LINKER=$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/$(echo ${{ matrix.target }} | sed s/armv7/armv7a/)21-clang++" >> "$GITHUB_ENV"
+      - name: Get rust version
+        id: rust-version
+        run: |
+          echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
+      - name: Prepopulate cargo index
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+          key: index-${{ steps.rust-version.outputs.version }}-${{ hashFiles('Cargo.toml') }}
+      - name: Build tests
+        # We `build` because we want the linker to verify we are cross-compiling correctly for check-only targets.
+        run: cargo build --target ${{ matrix.target }} --tests ${{ matrix.extra_test_args }}
+        shell: bash
+        env: ${{ matrix.custom_env }}
+        # Windows builds are the slowest
+      - name: Cache deps in Windows tests
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/cache/restore@v4
+        id: test-cache-restore
+        with:
+          path: .cache/build-dir
+          key: wintest-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+      - name: Build tests
+        # We `build` because we want the linker to verify we are cross-compiling correctly for check-only targets.
+        run: cargo build -vv --target ${{ matrix.target }} --tests ${{ matrix.extra_test_args }}
+        shell: bash
+        env: ${{ matrix.custom_env }}
+        # By default it'd be saved after later cargo calls, which already invalidated the cache
+      - name: Cache deps in Windows tests
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/build-dir
+          key: ${{ steps.test-cache-restore.outputs.cache-primary-key }}
+      - name: Run tests (skip=${{ matrix.check_only }})
+        if: "!matrix.check_only"
+        run: cargo test --target ${{ matrix.target }} ${{ matrix.extra_test_args }}
+        shell: bash
+        env: ${{ matrix.custom_env }}
+      - name: Test boring-sys2 cargo publish
+        # Running `cargo publish --dry-run` tests two things:
+        #
+        # 1. That `boring-sys2` can build BoringSSL with just the files included
+        #    in the crates.io package (as determined by the `include` field in
+        #    the `Cargo.toml`).
+        # 2. That the final `boring-sys2` package size, including the BoringSSL
+        #    submodules, is not too large to be published to `crates.io`.
+        #
+        # Both of these may no longer be the case after updating the BoringSSL
+        # submodules to a new revision, so it's important to test this on CI.
+        run: cargo publish --dry-run -p boring-sys2
 
   cross-build:
     name: Cross build from macOS to Linux
@@ -275,26 +344,28 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
     steps:
-    - uses: actions/checkout@v6
-      with:
-        submodules: 'recursive'
-    - name: Install Rust (rustup)
-      run: rustup toolchain install stable --no-self-update --profile minimal --target ${{ matrix.target }} && rustup default stable
-      shell: bash
-    - name: Install golang
-      uses: actions/setup-go@v6
-      with:
-        go-version: '>=1.22.0'
-    - name: Install ${{ matrix.target }} toolchain
-      run: brew tap messense/macos-cross-toolchains && brew install ${{ matrix.target }}
-    - name: Set BORING_BSSL_SYSROOT
-      run: echo "BORING_BSSL_SYSROOT=$(brew --prefix ${{ matrix.target }})/toolchain/${{ matrix.target }}/sysroot" >> $GITHUB_ENV
-      shell: bash
-    - name: Set CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER
-      run: echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=${{ matrix.target }}-gcc" >> $GITHUB_ENV
-      shell: bash
-    - name: Build for ${{ matrix.target }}
-      run: cargo build --target ${{ matrix.target }} --all-targets
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+      - name: Install Rust (rustup)
+        run: rustup toolchain install stable --no-self-update --profile minimal --target ${{ matrix.target }} && rustup default stable
+        shell: bash
+      - name: Install golang
+        uses: actions/setup-go@v6
+        with:
+          go-version: ">=1.22.0"
+      - name: Install ${{ matrix.target }} toolchain
+        run: brew tap messense/macos-cross-toolchains && brew install ${{ matrix.target }}
+      - name: Set BORING_BSSL_SYSROOT
+        run: echo "BORING_BSSL_SYSROOT=$(brew --prefix ${{ matrix.target }})/toolchain/${{ matrix.target }}/sysroot" >> $GITHUB_ENV
+        shell: bash
+      - name: Set CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER
+        run: echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=${{ matrix.target }}-gcc" >> $GITHUB_ENV
+        shell: bash
+      - name: Set CXXFLAGS
+        run: echo "CXXFLAGS=-D__STDC_FORMAT_MACROS" >> $GITHUB_ENV
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --target ${{ matrix.target }} --all-targets
 
   test-features:
     name: Test features
@@ -302,13 +373,13 @@ jobs:
     env:
       CARGO_INCREMENTAL: 1
     steps:
-    - uses: actions/checkout@v6
-      with:
-        submodules: 'recursive'
-    - name: Install Rust (rustup)
-      run: rustup update stable --no-self-update && rustup default stable
-    - name: Run `underscore-wildcards` tests
-      run: cargo test --features underscore-wildcards
+      - uses: actions/checkout@v6
+        with:
+          submodules: "recursive"
+      - name: Install Rust (rustup)
+        run: rustup update stable --no-self-update && rustup default stable
+      - name: Run `underscore-wildcards` tests
+        run: cargo test --features underscore-wildcards
 
   crates:
     name: crates

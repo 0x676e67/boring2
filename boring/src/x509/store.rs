@@ -36,7 +36,7 @@
 //!
 //! let certificate: X509 = builder.build();
 //! let mut builder = X509StoreBuilder::new().unwrap();
-//! let _ = builder.add_cert(certificate);
+//! let _ = builder.add_cert(&certificate);
 //! let store: X509Store = builder.build();
 //! ```
 
@@ -44,11 +44,11 @@ use crate::error::ErrorStack;
 use crate::ffi;
 use crate::stack::StackRef;
 use crate::x509::verify::{X509VerifyFlags, X509VerifyParamRef};
-use crate::x509::{X509Object, X509};
+use crate::x509::{X509Object, X509Ref};
 use crate::{cvt, cvt_p};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use openssl_macros::corresponds;
-use std::mem;
+use std::mem::ManuallyDrop;
 
 foreign_type_and_impl_send_sync! {
     type CType = ffi::X509_STORE;
@@ -73,18 +73,16 @@ impl X509StoreBuilder {
     /// Constructs the `X509Store`.
     #[must_use]
     pub fn build(self) -> X509Store {
-        let store = X509Store(self.0);
-        mem::forget(self);
-        store
+        X509Store(ManuallyDrop::new(self).0)
     }
 }
 
 impl X509StoreBuilderRef {
     /// Adds a certificate to the certificate store.
-    // FIXME should take an &X509Ref
     #[corresponds(X509_STORE_add_cert)]
-    pub fn add_cert(&mut self, cert: X509) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_STORE_add_cert(self.as_ptr(), cert.as_ptr())).map(|_| ()) }
+    pub fn add_cert(&mut self, cert: impl AsRef<X509Ref>) -> Result<(), ErrorStack> {
+        let cert = cert.as_ref();
+        unsafe { cvt(ffi::X509_STORE_add_cert(self.as_ptr(), cert.as_ptr())) }
     }
 
     /// Load certificates from their default locations.
@@ -94,7 +92,7 @@ impl X509StoreBuilderRef {
     /// build time otherwise.
     #[corresponds(X509_STORE_set_default_paths)]
     pub fn set_default_paths(&mut self) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_STORE_set_default_paths(self.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_STORE_set_default_paths(self.as_ptr())) }
     }
 
     /// Sets certificate chain validation related flags.
@@ -114,7 +112,7 @@ impl X509StoreBuilderRef {
     /// Sets certificate chain validation related parameters.
     #[corresponds(X509_STORE_set1_param)]
     pub fn set_param(&mut self, param: &X509VerifyParamRef) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_STORE_set1_param(self.as_ptr(), param.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_STORE_set1_param(self.as_ptr(), param.as_ptr())) }
     }
 
     /// For testing only
@@ -177,6 +175,7 @@ impl X509StoreRef {
 }
 
 #[test]
+#[allow(clippy::redundant_clone)]
 #[should_panic = "Shared X509Store can't be mutated"]
 fn set_cert_store_pevents_mutability() {
     use crate::ssl::*;

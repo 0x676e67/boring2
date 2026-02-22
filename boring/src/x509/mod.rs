@@ -20,7 +20,7 @@ use std::net::IpAddr;
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::{LazyLock, Once};
+use std::sync::LazyLock;
 
 use crate::asn1::{
     Asn1BitStringRef, Asn1IntegerRef, Asn1Object, Asn1ObjectRef, Asn1StringRef, Asn1TimeRef,
@@ -36,6 +36,7 @@ use crate::pkey::{HasPrivate, HasPublic, PKey, PKeyRef, Public};
 use crate::ssl::SslRef;
 use crate::stack::{Stack, StackRef, Stackable};
 use crate::string::OpensslString;
+use crate::try_int;
 use crate::util::ForeignTypeRefExt;
 use crate::x509::verify::{X509VerifyParam, X509VerifyParamRef};
 use crate::{cvt, cvt_n, cvt_p};
@@ -105,12 +106,9 @@ impl X509StoreContextRef {
     #[must_use]
     pub fn ex_data<T>(&self, index: Index<X509StoreContext, T>) -> Option<&T> {
         unsafe {
-            let data = ffi::X509_STORE_CTX_get_ex_data(self.as_ptr(), index.as_raw());
-            if data.is_null() {
-                None
-            } else {
-                Some(&*(data as *const T))
-            }
+            ffi::X509_STORE_CTX_get_ex_data(self.as_ptr(), index.as_raw())
+                .cast::<T>()
+                .as_ref()
         }
     }
 
@@ -118,12 +116,9 @@ impl X509StoreContextRef {
     #[corresponds(X509_STORE_CTX_get_ex_data)]
     pub fn ex_data_mut<T>(&mut self, index: Index<X509StoreContext, T>) -> Option<&mut T> {
         unsafe {
-            let data = ffi::X509_STORE_CTX_get_ex_data(self.as_ptr(), index.as_raw());
-            if data.is_null() {
-                None
-            } else {
-                Some(&mut *(data as *mut T))
-            }
+            ffi::X509_STORE_CTX_get_ex_data(self.as_ptr(), index.as_raw())
+                .cast::<T>()
+                .as_mut()
         }
     }
 
@@ -145,7 +140,7 @@ impl X509StoreContextRef {
             ffi::X509_STORE_CTX_set_ex_data(
                 self.as_ptr(),
                 index.as_raw(),
-                Box::into_raw(data) as *mut c_void,
+                Box::into_raw(data).cast(),
             );
         }
     }
@@ -368,13 +363,13 @@ impl X509Builder {
     /// Sets the notAfter constraint on the certificate.
     #[corresponds(X509_set1_notAfter)]
     pub fn set_not_after(&mut self, not_after: &Asn1TimeRef) -> Result<(), ErrorStack> {
-        unsafe { cvt(X509_set1_notAfter(self.0.as_ptr(), not_after.as_ptr())).map(|_| ()) }
+        unsafe { cvt(X509_set1_notAfter(self.0.as_ptr(), not_after.as_ptr())) }
     }
 
     /// Sets the notBefore constraint on the certificate.
     #[corresponds(X509_set1_notBefore)]
     pub fn set_not_before(&mut self, not_before: &Asn1TimeRef) -> Result<(), ErrorStack> {
-        unsafe { cvt(X509_set1_notBefore(self.0.as_ptr(), not_before.as_ptr())).map(|_| ()) }
+        unsafe { cvt(X509_set1_notBefore(self.0.as_ptr(), not_before.as_ptr())) }
     }
 
     /// Sets the version of the certificate.
@@ -383,7 +378,7 @@ impl X509Builder {
     /// the X.509 standard should pass `2` to this method.
     #[corresponds(X509_set_version)]
     pub fn set_version(&mut self, version: i32) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_set_version(self.0.as_ptr(), version.into())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_set_version(self.0.as_ptr(), version.into())) }
     }
 
     /// Sets the serial number of the certificate.
@@ -394,7 +389,6 @@ impl X509Builder {
                 self.0.as_ptr(),
                 serial_number.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -406,7 +400,6 @@ impl X509Builder {
                 self.0.as_ptr(),
                 issuer_name.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -435,7 +428,6 @@ impl X509Builder {
                 self.0.as_ptr(),
                 subject_name.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -445,7 +437,7 @@ impl X509Builder {
     where
         T: HasPublic,
     {
-        unsafe { cvt(ffi::X509_set_pubkey(self.0.as_ptr(), key.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_set_pubkey(self.0.as_ptr(), key.as_ptr())) }
     }
 
     /// Returns a context object which is needed to create certain X509 extension values.
@@ -499,7 +491,7 @@ impl X509Builder {
     where
         T: HasPrivate,
     {
-        unsafe { cvt(ffi::X509_sign(self.0.as_ptr(), key.as_ptr(), hash.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_sign(self.0.as_ptr(), key.as_ptr(), hash.as_ptr())) }
     }
 
     /// Consumes the builder, returning the certificate.
@@ -549,7 +541,7 @@ impl X509Ref {
             if stack.is_null() {
                 None
             } else {
-                Some(Stack::from_ptr(stack as *mut _))
+                Some(Stack::from_ptr(stack.cast()))
             }
         }
     }
@@ -578,7 +570,7 @@ impl X509Ref {
             if stack.is_null() {
                 None
             } else {
-                Some(Stack::from_ptr(stack as *mut _))
+                Some(Stack::from_ptr(stack.cast()))
             }
         }
     }
@@ -619,14 +611,14 @@ impl X509Ref {
                 buf: [0; ffi::EVP_MAX_MD_SIZE as usize],
                 len: ffi::EVP_MAX_MD_SIZE as usize,
             };
-            let mut len = ffi::EVP_MAX_MD_SIZE.try_into().unwrap();
+            let mut len = try_int(ffi::EVP_MAX_MD_SIZE)?;
             cvt(ffi::X509_digest(
                 self.as_ptr(),
                 hash_type.as_ptr(),
-                digest.buf.as_mut_ptr() as *mut _,
+                digest.buf.as_mut_ptr(),
                 &mut len,
             ))?;
-            digest.len = len as usize;
+            digest.len = try_int(len)?;
 
             Ok(digest)
         }
@@ -667,7 +659,7 @@ impl X509Ref {
             let mut signature = ptr::null();
             X509_get0_signature(&mut signature, ptr::null_mut(), self.as_ptr());
             assert!(!signature.is_null());
-            Asn1BitStringRef::from_ptr(signature as *mut _)
+            Asn1BitStringRef::from_ptr(signature.cast_mut())
         }
     }
 
@@ -679,7 +671,7 @@ impl X509Ref {
             let mut algor = ptr::null();
             X509_get0_signature(ptr::null_mut(), &mut algor, self.as_ptr());
             assert!(!algor.is_null());
-            X509AlgorithmRef::from_ptr(algor as *mut _)
+            X509AlgorithmRef::from_ptr(algor.cast_mut())
         }
     }
 
@@ -728,7 +720,7 @@ impl X509Ref {
         unsafe {
             cvt_n(ffi::X509_check_host(
                 self.as_ptr(),
-                host.as_ptr() as _,
+                host.as_ptr().cast(),
                 host.len(),
                 0,
                 std::ptr::null_mut(),
@@ -880,7 +872,7 @@ pub struct X509v3Context<'a>(ffi::X509V3_CTX, PhantomData<(&'a X509Ref, &'a Conf
 impl X509v3Context<'_> {
     #[must_use]
     pub fn as_ptr(&self) -> *mut ffi::X509V3_CTX {
-        &self.0 as *const _ as *mut _
+        std::ptr::addr_of!(self.0).cast_mut()
     }
 }
 
@@ -935,8 +927,8 @@ impl X509Extension {
                     &mut ctx
                 }
             };
-            let name = name.as_ptr() as *mut _;
-            let value = value.as_ptr() as *mut _;
+            let name = name.as_ptr().cast_mut();
+            let value = value.as_ptr().cast_mut();
 
             cvt_p(ffi::X509V3_EXT_nconf(conf, context_ptr, name, value))
                 .map(|p| X509Extension::from_ptr(p))
@@ -981,7 +973,7 @@ impl X509Extension {
                 }
             };
             let name = name.as_raw();
-            let value = value.as_ptr() as *mut _;
+            let value = value.as_ptr().cast_mut();
 
             cvt_p(ffi::X509V3_EXT_nconf_nid(conf, context_ptr, name, value))
                 .map(|p| X509Extension::from_ptr(p))
@@ -1024,17 +1016,15 @@ impl X509NameBuilder {
     pub fn append_entry_by_text(&mut self, field: &str, value: &str) -> Result<(), ErrorStack> {
         unsafe {
             let field = CString::new(field).map_err(ErrorStack::internal_error)?;
-            assert!(value.len() <= ValueLen::MAX as usize);
             cvt(ffi::X509_NAME_add_entry_by_txt(
                 self.0.as_ptr(),
-                field.as_ptr() as *mut _,
+                field.as_ptr().cast_mut(),
                 ffi::MBSTRING_UTF8,
                 value.as_ptr(),
-                value.len() as ValueLen,
+                try_int(value.len())?,
                 -1,
                 0,
             ))
-            .map(|_| ())
         }
     }
 
@@ -1048,17 +1038,15 @@ impl X509NameBuilder {
     ) -> Result<(), ErrorStack> {
         unsafe {
             let field = CString::new(field).map_err(ErrorStack::internal_error)?;
-            assert!(value.len() <= ValueLen::MAX as usize);
             cvt(ffi::X509_NAME_add_entry_by_txt(
                 self.0.as_ptr(),
-                field.as_ptr() as *mut _,
+                field.as_ptr().cast_mut(),
                 ty.as_raw(),
                 value.as_ptr(),
-                value.len() as ValueLen,
+                try_int(value.len())?,
                 -1,
                 0,
             ))
-            .map(|_| ())
         }
     }
 
@@ -1066,17 +1054,15 @@ impl X509NameBuilder {
     #[corresponds(X509_NAME_add_entry_by_NID)]
     pub fn append_entry_by_nid(&mut self, field: Nid, value: &str) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(value.len() <= ValueLen::MAX as usize);
             cvt(ffi::X509_NAME_add_entry_by_NID(
                 self.0.as_ptr(),
                 field.as_raw(),
                 ffi::MBSTRING_UTF8,
-                value.as_ptr() as *mut _,
-                value.len() as ValueLen,
+                value.as_ptr().cast_mut(),
+                try_int(value.len())?,
                 -1,
                 0,
             ))
-            .map(|_| ())
         }
     }
 
@@ -1089,17 +1075,15 @@ impl X509NameBuilder {
         ty: Asn1Type,
     ) -> Result<(), ErrorStack> {
         unsafe {
-            assert!(value.len() <= ValueLen::MAX as usize);
             cvt(ffi::X509_NAME_add_entry_by_NID(
                 self.0.as_ptr(),
                 field.as_raw(),
                 ty.as_raw(),
-                value.as_ptr() as *mut _,
-                value.len() as ValueLen,
+                value.as_ptr().cast_mut(),
+                try_int(value.len())?,
                 -1,
                 0,
             ))
-            .map(|_| ())
         }
     }
 
@@ -1112,11 +1096,6 @@ impl X509NameBuilder {
         X509Name::from_der(&self.0.to_der().unwrap()).unwrap()
     }
 }
-
-#[cfg(not(feature = "legacy-compat-deprecated"))]
-type ValueLen = isize;
-#[cfg(feature = "legacy-compat-deprecated")]
-type ValueLen = i32;
 
 foreign_type_and_impl_send_sync! {
     type CType = ffi::X509_NAME;
@@ -1296,7 +1275,7 @@ impl X509ReqBuilder {
     /// Set the numerical value of the version field.
     #[corresponds(X509_REQ_set_version)]
     pub fn set_version(&mut self, version: i32) -> Result<(), ErrorStack> {
-        unsafe { cvt(ffi::X509_REQ_set_version(self.0.as_ptr(), version.into())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_REQ_set_version(self.0.as_ptr(), version.into())) }
     }
 
     /// Set the issuer name.
@@ -1307,7 +1286,6 @@ impl X509ReqBuilder {
                 self.0.as_ptr(),
                 subject_name.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -1317,7 +1295,7 @@ impl X509ReqBuilder {
     where
         T: HasPublic,
     {
-        unsafe { cvt(ffi::X509_REQ_set_pubkey(self.0.as_ptr(), key.as_ptr())).map(|_| ()) }
+        unsafe { cvt(ffi::X509_REQ_set_pubkey(self.0.as_ptr(), key.as_ptr())) }
     }
 
     /// Return an `X509v3Context`. This context object can be used to construct
@@ -1355,7 +1333,6 @@ impl X509ReqBuilder {
                 self.0.as_ptr(),
                 extensions.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -1371,7 +1348,6 @@ impl X509ReqBuilder {
                 key.as_ptr(),
                 hash.as_ptr(),
             ))
-            .map(|_| ())
         }
     }
 
@@ -1766,7 +1742,7 @@ impl X509AlgorithmRef {
             let mut oid = ptr::null();
             X509_ALGOR_get0(&mut oid, ptr::null_mut(), ptr::null_mut(), self.as_ptr());
             assert!(!oid.is_null());
-            Asn1ObjectRef::from_ptr(oid as *mut _)
+            Asn1ObjectRef::from_ptr(oid.cast_mut())
         }
     }
 }
@@ -1809,16 +1785,9 @@ use crate::ffi::X509_OBJECT_get0_X509;
 #[allow(bad_style)]
 unsafe fn X509_OBJECT_free(x: *mut ffi::X509_OBJECT) {
     ffi::X509_OBJECT_free_contents(x);
-    ffi::OPENSSL_free(x as *mut libc::c_void);
+    ffi::OPENSSL_free(x.cast());
 }
 
 unsafe fn get_new_x509_store_ctx_idx(f: ffi::CRYPTO_EX_free) -> c_int {
-    // hack around https://rt.openssl.org/Ticket/Display.html?id=3710&user=guest&pass=guest
-    static ONCE: Once = Once::new();
-
-    ONCE.call_once(|| {
-        ffi::X509_STORE_CTX_get_ex_new_index(0, ptr::null_mut(), ptr::null_mut(), None, None);
-    });
-
     ffi::X509_STORE_CTX_get_ex_new_index(0, ptr::null_mut(), ptr::null_mut(), None, f)
 }

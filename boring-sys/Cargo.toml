@@ -13,14 +13,16 @@ links = "boringssl"
 build = "build/main.rs"
 readme = "README.md"
 categories = ["cryptography", "external-ffi-bindings"]
+keywords = ["tls", "boringssl", "openssl", "fips", "ml-kem"]
 edition = { workspace = true }
-rust-version = "1.77"
+rust-version = { workspace = true }
 include = [
     "/*.md",
     "/*.toml",
     "/LICENSE-MIT",
     "/cmake/*.cmake",
     "/deps/boringssl/**/*.[chS]",
+    "/deps/boringssl/**/*.inc",
     "/deps/boringssl/**/*.asm",
     "/deps/boringssl/sources.json",
     "/deps/boringssl/src/crypto/obj/obj_mac.num",
@@ -48,6 +50,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 # https://boringssl.googlesource.com/boringssl/+/master/crypto/fipsmodule/FIPS.md
 # for instructions and more details on the boringssl FIPS flag.
 fips = []
+
+# Enables Raw public key API (https://datatracker.ietf.org/doc/html/rfc7250)
+rpk = []
+
+# Require mlkem.h
+mlkem = []
 
 # Applies a patch (`patches/underscore-wildcards.patch`) to enable
 # `ffi::X509_CHECK_FLAG_UNDERSCORE_WILDCARDS`. This feature is necessary in
